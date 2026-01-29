@@ -2,12 +2,9 @@
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <h1 class="text-3xl font-bold underline text-center pt-10">
-      Solar MVP Setup
-    </h1>
-  </div>
+  <router-view />
 </template>
 
-<style scoped>
+<style>
+/* Global styles can go here if needed */
 </style>
