@@ -6,12 +6,14 @@ type ButtonVariant = 'primary' | 'secondary' | 'glass' | 'custom';
 const props = withDefaults(defineProps<{
     variant?: ButtonVariant;
     customClass?: string;
+    disabled?: boolean;
 }>(), {
     variant: 'primary',
-    customClass: ''
+    customClass: '',
+    disabled: false
 });
 
-const baseClasses = "font-medium transition-all focus:outline-none";
+const baseClasses = "font-medium transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed";
 
 const variantClasses = computed(() => {
     switch (props.variant) {
@@ -30,7 +32,7 @@ const variantClasses = computed(() => {
 </script>
 
 <template>
-    <button :class="[baseClasses, variantClasses, customClass]">
+    <button :class="[baseClasses, variantClasses, customClass]" :disabled="disabled">
         <slot></slot>
     </button>
 </template>
