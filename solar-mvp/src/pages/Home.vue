@@ -5,6 +5,8 @@ import { debounce } from "@/utils/debounce";
 import AtomInput from "@/components/atoms/AtomInput.vue";
 import AtomButton from "@/components/atoms/AtomButton.vue";
 import AtomModal from "@/components/atoms/AtomModal.vue";
+import AtomIcon from "@/components/atoms/AtomIcon.vue";
+import heroBg from "@/assets/hero-bg.png";
 
 const isMapActive = ref(false);
 const showAddressModal = ref(false);
@@ -73,114 +75,206 @@ watch(addressInput, (newValue) => {
     suggestions.value = [];
   }
 });
+
+const features = [
+  {
+    icon: "IconLocation",
+    title: "Locate",
+    desc: "Instant address search with global coverage.",
+  },
+  {
+    icon: "IconHome",
+    title: "Design",
+    desc: "Precision 3D roof modeling and panel placement.",
+  },
+  {
+    icon: "IconBolt",
+    title: "Analyze",
+    desc: "Calculate potential energy generation tailored to you.",
+  },
+];
 </script>
 
 <template>
-  <div class="w-full h-screen bg-slate-100 overflow-hidden relative">
-    <!-- Landing State -->
-    <div
-      class="flex flex-col items-center justify-center h-full space-y-8 animate-fade-in"
-    >
-      <div class="text-center space-y-4">
-        <h1 class="text-5xl font-bold text-slate-800 tracking-tight">
-          Solar MVP
-        </h1>
-        <p class="text-lg text-slate-600">Plan your solar installation in 3D</p>
-      </div>
-
-      <AtomButton
-        @click="openAddressModal"
-        variant="custom"
-        custom-class="group relative px-8 py-4 bg-indigo-600 text-white font-semibold rounded-full shadow-lg hover:bg-indigo-700 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300"
-      >
-        Start Project
-        <span
-          class="absolute inset-0 rounded-full ring-2 ring-white/20 group-hover:ring-4 group-hover:ring-indigo-300/30 transition-all"
-        ></span>
-      </AtomButton>
+  <div
+    class="relative w-full h-screen overflow-hidden bg-slate-900 font-sans selection:bg-indigo-500 selection:text-white"
+  >
+    <!-- Background Image with Overlay -->
+    <div class="absolute inset-0 z-0">
+      <img :src="heroBg" alt="Solar Home" class="w-full h-full object-cover" />
+      <div
+        class="absolute inset-0 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-transparent"
+      ></div>
     </div>
 
-    <!-- Address Modal -->
+    <!-- Main Content -->
     <div
-      v-if="showAddressModal"
-      class="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+      class="relative z-10 flex flex-col h-full container mx-auto px-6 py-12"
     >
+      <!-- Navbar Placeholder (Logo) -->
+      <nav class="flex items-center justify-between mb-16 animate-fade-in-down">
+        <div class="flex items-center gap-2">
+          <div
+            class="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center text-white font-bold"
+          >
+            S
+          </div>
+          <span class="text-xl font-bold text-white tracking-wide"
+            >SolarMVP</span
+          >
+        </div>
+      </nav>
+
+      <!-- Hero Text -->
       <div
-        class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md transform transition-all scale-100 relative"
+        class="flex-1 flex flex-col justify-center max-w-2xl animate-fade-in-up"
       >
-        <h3 class="text-2xl font-bold text-slate-800 mb-6">Enter Location</h3>
+        <h1
+          class="text-5xl md:text-7xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-indigo-200 tracking-tight leading-tight mb-6"
+        >
+          Power Your Future <br />
+          with Solar.
+        </h1>
+        <p
+          class="text-lg md:text-xl text-slate-300 mb-8 max-w-lg leading-relaxed"
+        >
+          Design, analyze, and optimize your solar installation in 3D.
+          Experience the future of energy independence today.
+        </p>
 
-        <div class="space-y-4 relative">
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1"
-              >Address or City</label
+        <div class="flex flex-col sm:flex-row gap-4">
+          <AtomButton
+            @click="openAddressModal"
+            variant="custom"
+            custom-class="group relative px-8 py-4 bg-indigo-600 text-white font-semibold rounded-full shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:bg-indigo-500 hover:shadow-[0_0_30px_rgba(79,70,229,0.5)] transition-all duration-300 transform hover:-translate-y-1"
+          >
+            Start Your Project
+            <span
+              class="ml-2 inline-block transition-transform group-hover:translate-x-1"
+              >→</span
             >
-            <div class="relative">
-              <AtomInput
-                v-model="addressInput"
-                @input="onInput"
-                @keyup.enter="startMap"
-                placeholder="e.g. 1600 Amphitheatre Parkway"
-                autofocus
-              />
-              <div v-if="isSearching" class="absolute right-3 top-3.5">
-                <div
-                  class="animate-spin h-5 w-5 border-2 border-indigo-500 rounded-full border-t-transparent"
-                ></div>
-              </div>
+          </AtomButton>
 
-              <!-- Suggestions Dropdown -->
-              <div
-                v-if="suggestions.length > 0"
-                class="absolute top-full left-0 z-20 w-full mt-1 bg-white rounded-xl shadow-xl border border-slate-100 max-h-60 overflow-y-auto overflow-hidden"
-              >
-                <ul class="py-1">
-                  <li
-                    v-for="(item, index) in suggestions"
-                    :key="index"
-                    @click="selectSuggestion(item)"
-                    class="px-4 py-3 hover:bg-indigo-50 cursor-pointer flex items-start gap-3 transition-colors text-left group"
-                  >
-                    <span
-                      class="mt-1 text-slate-400 group-hover:text-indigo-500"
-                      >📍</span
-                    >
-                    <span
-                      class="text-sm text-slate-700 group-hover:text-slate-900 leading-snug"
-                      >{{ item.display_name }}</span
-                    >
-                  </li>
-                </ul>
-              </div>
-            </div>
+          <AtomButton
+            variant="custom"
+            custom-class="px-8 py-4 bg-white/10 text-white font-medium rounded-full backdrop-blur-md hover:bg-white/20 transition-all border border-white/10"
+          >
+            Learn More
+          </AtomButton>
+        </div>
+      </div>
+
+      <!-- Feature Cards -->
+      <div
+        class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12 animate-fade-in-up"
+        style="animation-delay: 0.2s"
+      >
+        <div
+          v-for="(feature, idx) in features"
+          :key="idx"
+          class="p-6 rounded-2xl bg-slate-800/40 backdrop-blur-md border border-white/5 hover:border-indigo-500/30 hover:bg-slate-800/60 transition-all duration-300 group"
+        >
+          <div
+            class="mb-4 text-slate-400 group-hover:text-indigo-400 transition-all duration-300"
+          >
+            <AtomIcon :name="feature.icon" size="32" />
           </div>
-
-          <div class="flex space-x-3 pt-2">
-            <AtomButton
-              @click="cancelSearch"
-              variant="secondary"
-              custom-class="flex-1"
-            >
-              Cancel
-            </AtomButton>
-            <AtomButton
-              @click="startMap"
-              variant="primary"
-              custom-class="flex-1"
-              :disabled="!canGoToMap"
-            >
-              Go to Map
-            </AtomButton>
-          </div>
+          <h3 class="text-xl font-bold text-white mb-2">{{ feature.title }}</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            {{ feature.desc }}
+          </p>
         </div>
       </div>
     </div>
+
+    <!-- Address Modal -->
+    <AtomModal
+      :isOpen="showAddressModal"
+      @close="cancelSearch"
+      customClass="!bg-white/90 backdrop-blur-xl p-8 max-w-lg border border-white/20"
+    >
+      <AtomButton
+        @click="cancelSearch"
+        variant="custom"
+        custom-class="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100/50 text-slate-400 hover:text-slate-600 transition-colors"
+      >
+        <AtomIcon :name="'IconClose'" size="20" />
+      </AtomButton>
+
+      <h3 class="text-2xl font-bold text-slate-800 mb-2">Find Your Roof</h3>
+      <p class="text-slate-500 mb-6 text-sm">
+        Enter your address to begin the 3D modeling process.
+      </p>
+
+      <div class="space-y-4 relative">
+        <div>
+          <div class="relative">
+            <div
+              class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+            >
+              <AtomIcon :name="'IconSearch'" class="text-slate-400" size="20" />
+            </div>
+            <AtomInput
+              v-model="addressInput"
+              @input="onInput"
+              @keyup.enter="startMap"
+              placeholder="Search address, city, or zip..."
+              autofocus
+              class="pl-10 h-12 border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full bg-slate-50"
+            />
+            <div v-if="isSearching" class="absolute right-3 top-3.5">
+              <div
+                class="animate-spin h-5 w-5 border-2 border-indigo-500 rounded-full border-t-transparent"
+              ></div>
+            </div>
+
+            <!-- Suggestions Dropdown -->
+            <div
+              v-if="suggestions.length > 0"
+              class="absolute top-full left-0 z-20 w-full mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-60 overflow-y-auto overflow-hidden animate-slide-up"
+            >
+              <ul class="py-1">
+                <li
+                  v-for="(item, index) in suggestions"
+                  :key="index"
+                  @click="selectSuggestion(item)"
+                  class="px-4 py-3 hover:bg-indigo-50 cursor-pointer flex items-start gap-3 transition-colors text-left group border-b border-slate-50 last:border-0"
+                >
+                  <div class="mt-1">
+                    <AtomIcon
+                      :name="'IconLocation'"
+                      size="18"
+                      class="text-slate-400 group-hover:text-indigo-500 transition-colors"
+                    />
+                  </div>
+                  <span
+                    class="text-sm text-slate-700 group-hover:text-slate-900 leading-snug"
+                    >{{ item.display_name }}</span
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex space-x-3 pt-4">
+          <AtomButton
+            @click="startMap"
+            variant="custom"
+            custom-class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="!canGoToMap"
+          >
+            Go to Map
+          </AtomButton>
+        </div>
+      </div>
+    </AtomModal>
 
     <!-- Map Modal -->
     <AtomModal
       :isOpen="isMapActive"
       @close="backToHome"
-      customClass="w-[90vw] h-[85vh] max-w-7xl p-0 overflow-hidden bg-slate-900"
+      customClass="w-[95vw] h-[90vh] max-w-8xl p-0 overflow-hidden bg-slate-900 rounded-xl"
     >
       <div class="w-full h-full relative">
         <CesiumMap :initial-address="searchAddress">
@@ -188,7 +282,7 @@ watch(addressInput, (newValue) => {
             <AtomButton
               @click="backToHome"
               variant="glass"
-              custom-class="flex items-center gap-2"
+              custom-class="flex items-center gap-2 bg-white/10 backdrop-blur text-white border border-white/10 hover:bg-white/20"
             >
               <span>←</span> Back
             </AtomButton>
@@ -201,15 +295,57 @@ watch(addressInput, (newValue) => {
 
 <style scoped>
 .animate-fade-in {
-  animation: fadeIn 0.8s ease-out;
+  animation: fadeIn 0.6s ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s ease-out backwards;
+}
+
+.animate-fade-in-down {
+  animation: fadeInDown 0.8s ease-out backwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.2s ease-out;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
     transform: translateY(10px);
   }
-
   to {
     opacity: 1;
     transform: translateY(0);
