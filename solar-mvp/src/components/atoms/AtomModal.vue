@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AtomButton from "@/components/atoms/AtomButton.vue";
+import AtomIcon from "@/components/atoms/AtomIcon.vue";
 defineProps({
   isOpen: {
     type: Boolean,
@@ -36,18 +38,19 @@ const close = () => {
           <!-- Header (Optional) -->
           <div
             v-if="title || $slots.header"
-            class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white z-10"
+            class="px-6 py-4 border-b border-slate-100 flex justify-between items-center z-10"
           >
             <h3 v-if="title" class="text-xl font-bold text-slate-800">
               {{ title }}
             </h3>
             <slot name="header"></slot>
-            <button
+            <AtomButton
               @click="close"
-              class="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-full hover:bg-slate-100"
+              variant="custom"
+              custom-class="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-full hover:bg-slate-100"
             >
-              <span class="text-2xl leading-none">&times;</span>
-            </button>
+              <AtomIcon :name="'IconClose'" :width="20" :height="20" />
+            </AtomButton>
           </div>
 
           <!-- Body -->

@@ -6,6 +6,7 @@ import AtomInput from "@/components/atoms/AtomInput.vue";
 import AtomButton from "@/components/atoms/AtomButton.vue";
 import AtomModal from "@/components/atoms/AtomModal.vue";
 import AtomIcon from "@/components/atoms/AtomIcon.vue";
+import AtomNotFound from "@/components/atoms/AtomNotFound.vue";
 import heroBg from "@/assets/hero-bg.png";
 
 const isMapActive = ref(false);
@@ -68,6 +69,7 @@ const onInput = debounce(() => {
 const selectSuggestion = (suggestion: any) => {
   addressInput.value = suggestion.display_name;
   suggestions.value = [];
+  startMap();
 };
 
 watch(addressInput, (newValue) => {
@@ -191,81 +193,78 @@ const features = [
     <AtomModal
       :isOpen="showAddressModal"
       @close="cancelSearch"
-      customClass="!bg-white/90 backdrop-blur-xl p-8 max-w-lg border border-white/20"
+      customClass="!bg-white/90 backdrop-blur-xl max-w-lg border border-white/20 !overflow-visible"
     >
-      <AtomButton
-        @click="cancelSearch"
-        variant="custom"
-        custom-class="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100/50 text-slate-400 hover:text-slate-600 transition-colors"
-      >
-        <AtomIcon :name="'IconClose'" size="20" />
-      </AtomButton>
+      <template #header>
+        <h3 class="text-2xl font-bold text-slate-800">Search locations</h3>
+      </template>
 
-      <h3 class="text-2xl font-bold text-slate-800 mb-2">Find Your Roof</h3>
-      <p class="text-slate-500 mb-6 text-sm">
-        Enter your address to begin the 3D modeling process.
-      </p>
+      <div class="p-8 h-[400px] overflow-y-auto">
+        <p class="text-slate-500 mb-6 text-sm">
+          Enter your address to begin the 3D modeling process.
+        </p>
 
-      <div class="space-y-4 relative">
-        <div>
-          <div class="relative">
-            <div
-              class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-            >
-              <AtomIcon :name="'IconSearch'" class="text-slate-400" size="20" />
-            </div>
-            <AtomInput
-              v-model="addressInput"
-              @input="onInput"
-              @keyup.enter="startMap"
-              placeholder="Search address, city, or zip..."
-              autofocus
-              class="pl-10 h-12 border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full bg-slate-50"
-            />
-            <div v-if="isSearching" class="absolute right-3 top-3.5">
+        <div class="space-y-4 relative">
+          <div>
+            <div class="relative">
               <div
-                class="animate-spin h-5 w-5 border-2 border-indigo-500 rounded-full border-t-transparent"
-              ></div>
-            </div>
+                class="absolute top-3 left-0 pl-3 flex items-center pointer-events-none"
+              >
+                <AtomIcon
+                  :name="'IconSearch'"
+                  class="text-slate-400"
+                  :size="'16'"
+                />
+              </div>
+              <AtomInput
+                v-model="addressInput"
+                @input="onInput"
+                @keyup.enter="startMap"
+                placeholder="Search address, city, or zip..."
+                autofocus
+                class="pl-10 h-12 border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full bg-slate-50"
+              />
+              <div v-if="isSearching" class="absolute right-3 top-3.5">
+                <div
+                  class="animate-spin h-5 w-5 border-2 border-indigo-500 rounded-full border-t-transparent"
+                ></div>
+              </div>
 
-            <!-- Suggestions Dropdown -->
-            <div
-              v-if="suggestions.length > 0"
-              class="absolute top-full left-0 z-20 w-full mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-60 overflow-y-auto overflow-hidden animate-slide-up"
-            >
-              <ul class="py-1">
-                <li
-                  v-for="(item, index) in suggestions"
-                  :key="index"
-                  @click="selectSuggestion(item)"
-                  class="px-4 py-3 hover:bg-indigo-50 cursor-pointer flex items-start gap-3 transition-colors text-left group border-b border-slate-50 last:border-0"
-                >
-                  <div class="mt-1">
-                    <AtomIcon
-                      :name="'IconLocation'"
-                      size="18"
-                      class="text-slate-400 group-hover:text-indigo-500 transition-colors"
-                    />
-                  </div>
-                  <span
-                    class="text-sm text-slate-700 group-hover:text-slate-900 leading-snug"
-                    >{{ item.display_name }}</span
+              <!-- Suggestions Dropdown -->
+              <div
+                v-if="suggestions.length > 0"
+                class="absolute top-full left-0 z-20 w-full mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-60 overflow-y-auto overflow-hidden animate-slide-up"
+              >
+                <ul class="py-1">
+                  <li
+                    v-for="(item, index) in suggestions"
+                    :key="index"
+                    @click="selectSuggestion(item)"
+                    class="px-4 py-3 hover:bg-indigo-50 cursor-pointer flex items-start gap-3 transition-colors text-left group border-b border-slate-50 last:border-0"
                   >
-                </li>
-              </ul>
+                    <div class="mt-1">
+                      <AtomIcon
+                        :name="'IconLocation'"
+                        size="18"
+                        class="text-slate-400 group-hover:text-indigo-500 transition-colors"
+                      />
+                    </div>
+                    <span
+                      class="text-sm text-slate-700 group-hover:text-slate-900 leading-snug"
+                      >{{ item.display_name }}</span
+                    >
+                  </li>
+                </ul>
+              </div>
+
+              <AtomNotFound
+                v-else
+                title="No location found"
+                message="Please check your spelling or try a different address."
+                icon="IconSearch"
+              />
             </div>
           </div>
-        </div>
-
-        <div class="flex space-x-3 pt-4">
-          <AtomButton
-            @click="startMap"
-            variant="custom"
-            custom-class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="!canGoToMap"
-          >
-            Go to Map
-          </AtomButton>
         </div>
       </div>
     </AtomModal>
