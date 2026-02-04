@@ -6,6 +6,7 @@ export function useFabricMap() {
   const activeTool = ref<string | null>(null); // 'polygon' | 'frame' | null
   const points = ref<{ x: number; y: number }[]>([]); // For polygon drawing
   let focusFrame: Rect | null = null;
+  let tempLine: Line | null = null; // Temporary dashed line for rubberbanding
 
   const initFabric = (canvasElement: HTMLCanvasElement) => {
     canvas.value = markRaw(
@@ -53,6 +54,12 @@ export function useFabricMap() {
 
     canvas.value.backgroundColor = "";
     points.value = [];
+
+    // Remove temporary line if exists
+    if (tempLine && canvas.value) {
+      canvas.value.remove(tempLine);
+      tempLine = null;
+    }
 
     // Remove existing listeners
     canvas.value.off("mouse:down");
@@ -114,6 +121,33 @@ export function useFabricMap() {
         }
         points.value.push(point);
       }
+
+      // Create/update temp line for rubberbanding
+      if (tempLine) {
+        canvas.value!.remove(tempLine);
+      }
+      tempLine = new Line([point.x, point.y, point.x, point.y], {
+        strokeWidth: 2,
+        stroke: "yellow",
+        strokeDashArray: [5, 5], // Dashed line
+        selectable: false,
+        evented: false,
+      });
+      canvas.value!.add(tempLine);
+    });
+
+    canvas.value.on("mouse:move", (options: any) => {
+      if (
+        activeTool.value !== "polygon" ||
+        points.value.length === 0 ||
+        !tempLine
+      )
+        return;
+
+      const pointer = canvas.value!.getScenePoint(options.e);
+      // Update the end point of the temp line
+      tempLine.set({ x2: pointer.x, y2: pointer.y });
+      canvas.value!.renderAll();
     });
 
     canvas.value.on("mouse:dblclick", () => {
@@ -124,6 +158,12 @@ export function useFabricMap() {
 
   const finishPolygon = () => {
     if (!canvas.value) return;
+
+    // Remove temp line
+    if (tempLine && canvas.value) {
+      canvas.value.remove(tempLine);
+      tempLine = null;
+    }
 
     // Clear temp points/lines (except focusFrame)
     const objects = canvas.value.getObjects();

@@ -1,4 +1,3 @@
-```
 <script setup lang="ts">
 import ToolSelectionPopup from "@/components/maps/ToolSelectionPopup.vue";
 import AtomIcon from "@/components/atoms/AtomIcon.vue";
