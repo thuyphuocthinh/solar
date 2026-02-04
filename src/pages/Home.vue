@@ -15,6 +15,9 @@ const addressInput = ref("");
 const searchAddress = ref("");
 const suggestions = ref<any[]>([]);
 const isSearching = ref(false);
+const searchCoordinates = ref<{ longitude: number; latitude: number } | null>(
+  null,
+);
 
 const canGoToMap = computed(() => addressInput.value.trim().length > 0);
 
@@ -38,11 +41,12 @@ const startMap = () => {
 const backToHome = () => {
   isMapActive.value = false;
   searchAddress.value = "";
+  searchCoordinates.value = null;
   addressInput.value = "";
 };
 
 const fetchSuggestions = async (query: string) => {
-  if (!query || query.length < 3) {
+  if (!query) {
     suggestions.value = [];
     return;
   }
@@ -67,8 +71,17 @@ const onInput = debounce(() => {
 }, 500);
 
 const selectSuggestion = (suggestion: any) => {
+  console.log("suggestion: ", suggestion);
   addressInput.value = suggestion.display_name;
   suggestions.value = [];
+
+  // Extract lat/lon from suggestion
+  if (suggestion.lat && suggestion.lon) {
+    searchCoordinates.value = {
+      latitude: parseFloat(suggestion.lat),
+      longitude: parseFloat(suggestion.lon),
+    };
+  }
   startMap();
 };
 
@@ -148,13 +161,15 @@ const features = [
           <AtomButton
             @click="openAddressModal"
             variant="custom"
-            custom-class="group relative px-8 py-4 bg-indigo-600 text-white font-semibold rounded-full shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:bg-indigo-500 hover:shadow-[0_0_30px_rgba(79,70,229,0.5)] transition-all duration-300 transform hover:-translate-y-1"
+            custom-class="group flex items-center gap-2 relative px-8 py-4 bg-indigo-600 text-white font-semibold rounded-full shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:bg-indigo-500 hover:shadow-[0_0_30px_rgba(79,70,229,0.5)] transition-all duration-300 transform hover:-translate-y-1"
           >
-            Start Your Project
-            <span
-              class="ml-2 inline-block transition-transform group-hover:translate-x-1"
-              >→</span
-            >
+            Start Drawing
+            <AtomIcon
+              name="IconArrowRight"
+              :width="'16px'"
+              :height="'16px'"
+              color="white"
+            />
           </AtomButton>
 
           <AtomButton
@@ -240,7 +255,7 @@ const features = [
                     v-for="(item, index) in suggestions"
                     :key="index"
                     @click="selectSuggestion(item)"
-                    class="px-4 py-3 hover:bg-indigo-50 cursor-pointer flex items-start gap-3 transition-colors text-left group border-b border-slate-50 last:border-0"
+                    class="px-4 py-3 hover:bg-indigo-50 cursor-pointer flex items-center gap-3 transition-colors text-left group border-b border-slate-50 last:border-0"
                   >
                     <div class="mt-1">
                       <AtomIcon
@@ -273,20 +288,16 @@ const features = [
     <AtomModal
       :isOpen="isMapActive"
       @close="backToHome"
-      customClass="w-[95vw] h-[90vh] max-w-8xl p-0 overflow-hidden bg-slate-900 rounded-xl"
+      customClass="w-full h-[90vh] max-w-full p-0 overflow-hidden bg-slate-900 rounded-xl"
     >
+      <template #header>
+        <h3 class="text-2xl font-bold text-slate-800">Map</h3>
+      </template>
       <div class="w-full h-full relative">
-        <CesiumMap :initial-address="searchAddress">
-          <div class="absolute top-4 left-4 z-10">
-            <AtomButton
-              @click="backToHome"
-              variant="glass"
-              custom-class="flex items-center gap-2 bg-white/10 backdrop-blur text-white border border-white/10 hover:bg-white/20"
-            >
-              <span>←</span> Back
-            </AtomButton>
-          </div>
-        </CesiumMap>
+        <CesiumMap
+          :initial-address="searchAddress"
+          :initial-coordinates="searchCoordinates"
+        />
       </div>
     </AtomModal>
   </div>
