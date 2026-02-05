@@ -275,11 +275,23 @@ export function useFabricMap() {
     canvas.value = null;
   };
 
+  const clearTool = () => {
+    points.value = [];
+    edges.value = [];
+    activeTool.value = "";
+    removeTempLine();
+    canvas.value?.getObjects().forEach((obj) => {
+      if (obj !== focusFrame) canvas.value!.remove(obj);
+    });
+  };
+
   return {
-    canvas,
+    points,
+    edges,
     activeTool,
     initFabric,
     handleSelectTool,
     clearFabric,
+    clearTool,
   };
 }

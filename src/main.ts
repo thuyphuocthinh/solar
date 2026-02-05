@@ -1,9 +1,12 @@
-import { createApp } from 'vue'
-import '@/assets/styles/style.css'
-import App from './App.vue'
-import router from './router'
+import { createApp } from "vue";
+import "@/assets/styles/style.css";
+import App from "./App.vue";
+import router from "./router";
+import { setupTippy } from "@/plugins/v-tippy.plugin";
 
-const app = createApp(App)
+const app = createApp(App);
 
-app.use(router)
-app.mount('#app')
+setupTippy(app);
+
+app.use(router);
+app.mount("#app");

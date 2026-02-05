@@ -22,8 +22,15 @@ const containerRef = ref<HTMLElement | null>(null);
 const fabricCanvasRef = ref<HTMLCanvasElement | null>(null);
 const isToolPopupOpen = ref(false);
 
-const { initFabric, handleSelectTool, clearFabric, activeTool } =
-  useFabricMap();
+const {
+  points,
+  edges,
+  clearTool,
+  initFabric,
+  handleSelectTool,
+  clearFabric,
+  activeTool,
+} = useFabricMap();
 const { initCesium, clearCesium, isLoading } = useCesium();
 
 const toggleToolPopup = () => {
@@ -100,6 +107,30 @@ onUnmounted(() => {
       :class="{ 'pointer-events-none': !activeTool }"
     >
       <canvas ref="fabricCanvasRef"></canvas>
+
+      <div
+        v-if="activeTool"
+        class="absolute top-8 left-[72%] z-40 flex flex-col gap-4"
+      >
+        <AtomButton
+          @click="clearTool"
+          variant="custom"
+          v-tippy="{ content: 'Clear', placement: 'top' }"
+          custom-class="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-600 backdrop-blur text-white border border-white/10 hover:bg-indigo-700"
+        >
+          <AtomIcon
+            name="IconClear"
+            :width="'20px'"
+            :height="'20px'"
+            color="white"
+          />
+        </AtomButton>
+        <!-- Action Buttons -->
+        <!-- Make shape -->
+        <!-- Ground Height -->
+        <!-- Show dimensions -->
+        <!-- Create 3d -->
+      </div>
     </div>
 
     <!-- Loading Overlay -->
