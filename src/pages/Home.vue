@@ -293,11 +293,12 @@ const features = [
       <template #header>
         <h3 class="text-2xl font-bold text-slate-800">Map</h3>
       </template>
-      <div class="w-full h-full relative">
+      <div class="w-full h-full relative overflow-hidden">
         <CesiumMap
           :initial-address="searchAddress"
           :initial-coordinates="searchCoordinates"
         />
+        <!-- Recreate Roof 3D will be here -->
       </div>
     </AtomModal>
   </div>

@@ -1,12 +1,22 @@
 import { ref, markRaw } from "vue";
 import { Canvas, Rect, Circle, Line, Polygon } from "fabric";
 
+type Point = { x: number; y: number };
+type Edge = { from: Point; to: Point };
+
 export function useFabricMap() {
   const canvas = ref<Canvas | null>(null);
-  const activeTool = ref<string | null>(null); // 'polygon' | 'frame' | null
-  const points = ref<{ x: number; y: number }[]>([]); // For polygon drawing
+  const activeTool = ref<string | null>(null);
+
+  const points = ref<Point[]>([]);
+  const edges = ref<Edge[]>([]);
   let focusFrame: Rect | null = null;
-  let tempLine: Line | null = null; // Temporary dashed line for rubberbanding
+  let tempLine: Line | null = null;
+  let isClosed = false;
+
+  // Track current start/end points for flexible polygon drawing
+  let currentStartPoint: Point | null = null;
+  let currentEndPoint: Point | null = null;
 
   const initFabric = (canvasElement: HTMLCanvasElement) => {
     canvas.value = markRaw(
@@ -14,7 +24,6 @@ export function useFabricMap() {
         width: window.innerWidth,
         height: window.innerHeight,
         selection: false,
-        renderOnAddRemove: true,
       }),
     );
 
@@ -22,12 +31,10 @@ export function useFabricMap() {
       left: window.innerWidth / 2,
       top: window.innerHeight / 2 - 70,
       width: 700,
-      height: 500,
+      height: 400,
       fill: "transparent",
       stroke: "white",
       strokeWidth: 4,
-      rx: 4,
-      ry: 4,
       originX: "center",
       originY: "center",
       selectable: false,
@@ -38,33 +45,192 @@ export function useFabricMap() {
     focusFrame = rect;
   };
 
-  const handleSelectTool = (type: string) => {
-    console.log("Selected tool:", type);
-    activeTool.value = type;
+  const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
-    if (!canvas.value) return;
+  const isNearPoint = (a: Point, b: Point, threshold = 10) =>
+    distance(a, b) < threshold;
 
-    // Preserve focusFrame, clear other objects
-    const objects = canvas.value.getObjects();
-    [...objects].forEach((obj) => {
-      if (obj !== focusFrame) {
-        canvas.value!.remove(obj);
-      }
-    });
-
-    canvas.value.backgroundColor = "";
-    points.value = [];
-
-    // Remove temporary line if exists
+  const removeTempLine = () => {
     if (tempLine && canvas.value) {
       canvas.value.remove(tempLine);
       tempLine = null;
     }
+  };
 
-    // Remove existing listeners
+  const createTempLine = (from: Point) => {
+    if (!canvas.value) return;
+
+    tempLine = new Line([from.x, from.y, from.x, from.y], {
+      stroke: "yellow",
+      strokeWidth: 2,
+      strokeDashArray: [6, 6],
+      selectable: false,
+      evented: false,
+    });
+
+    canvas.value.add(tempLine);
+  };
+
+  const addPointVisual = (p: Point) => {
+    const circle = new Circle({
+      left: p.x,
+      top: p.y,
+      radius: 5,
+      fill: "yellow",
+      originX: "center",
+      originY: "center",
+      selectable: false,
+      evented: false,
+    });
+    canvas.value!.add(circle);
+    points.value.push(p);
+  };
+
+  const addLineVisual = (from: Point, to: Point) => {
+    const line = new Line([from.x, from.y, to.x, to.y], {
+      stroke: "yellow",
+      strokeWidth: 2,
+      selectable: false,
+      evented: false,
+    });
+    canvas.value!.add(line);
+    edges.value.push({ from, to });
+  };
+
+  const addPoint = (p: Point, isStart = false) => {
+    // Track start and end points
+    if (isStart || points.value.length === 0) {
+      currentStartPoint = p;
+    }
+    currentEndPoint = p;
+
+    const last = points.value[points.value.length - 1];
+    addPointVisual(p);
+
+    if (last) addLineVisual(last, p);
+
+    removeTempLine();
+    createTempLine(p);
+  };
+
+  const closePolygon = (snapToPoint: Point) => {
+    if (!currentEndPoint || !currentStartPoint) return;
+
+    // Draw line from current end to the snapped point
+    addLineVisual(currentEndPoint, snapToPoint);
+
+    // Remove the temp line (dashline)
+    removeTempLine();
+
+    isClosed = true;
+  };
+
+  const openPolygonAgain = (fromPoint: Point) => {
+    isClosed = false;
+    currentEndPoint = fromPoint;
+    createTempLine(fromPoint);
+  };
+
+  const findNearPoint = (p: Point, threshold = 10): Point | null => {
+    return (
+      points.value.find((point) => isNearPoint(p, point, threshold)) || null
+    );
+  };
+
+  const setupPolygonDrawing = () => {
+    if (!canvas.value) return;
+
+    canvas.value.on("mouse:down", (opt: any) => {
+      if (activeTool.value !== "polygon") return;
+
+      const pointer = canvas.value!.getScenePoint(opt.e);
+      const point = { x: pointer.x, y: pointer.y };
+
+      const nearExistingPoint = findNearPoint(point);
+
+      if (isClosed) {
+        if (nearExistingPoint) {
+          // Start from existing point, don't add new point
+          openPolygonAgain(nearExistingPoint);
+        } else {
+          // Add new point and start from there
+          addPointVisual(point);
+          openPolygonAgain(point);
+        }
+        return;
+      }
+
+      // Case 2: Click near an existing point → close polygon
+      if (nearExistingPoint && points.value.length >= 3) {
+        // Close polygon to the near existing point
+        closePolygon(nearExistingPoint);
+        return;
+      }
+
+      // Case 3: Normal case → add new point
+      addPoint(point);
+    });
+
+    canvas.value.on("mouse:move", (opt: any) => {
+      if (activeTool.value !== "polygon" || !tempLine || isClosed) return;
+
+      const pointer = canvas.value!.getScenePoint(opt.e);
+      tempLine.set({ x2: pointer.x, y2: pointer.y });
+      canvas.value!.renderAll();
+    });
+
+    canvas.value.on("mouse:dblclick", () => {
+      if (activeTool.value !== "polygon" || points.value.length < 3) return;
+      finishPolygon();
+    });
+  };
+
+  const finishPolygon = () => {
+    if (!canvas.value) return;
+
+    removeTempLine();
+
+    canvas.value.getObjects().forEach((obj) => {
+      if (
+        obj !== focusFrame &&
+        (obj instanceof Line || obj instanceof Circle)
+      ) {
+        canvas.value!.remove(obj);
+      }
+    });
+
+    const polygon = new Polygon(points.value, {
+      fill: "rgba(255,255,255,0.2)",
+      stroke: "yellow",
+      strokeWidth: 2,
+      selectable: true,
+    });
+
+    canvas.value.add(polygon);
+
+    points.value = [];
+    isClosed = false;
+    currentStartPoint = null;
+    currentEndPoint = null;
+  };
+
+  const handleSelectTool = (type: string) => {
+    activeTool.value = type;
+    if (!canvas.value) return;
+
     canvas.value.off("mouse:down");
     canvas.value.off("mouse:move");
     canvas.value.off("mouse:dblclick");
+
+    points.value = [];
+    isClosed = false;
+    currentStartPoint = null;
+    currentEndPoint = null;
+    removeTempLine();
+
+    canvas.value.getObjects().forEach((obj) => {
+      if (obj !== focusFrame) canvas.value!.remove(obj);
+    });
 
     switch (type) {
       case "polygon":
@@ -84,119 +250,8 @@ export function useFabricMap() {
     }
   };
 
-  const setupPolygonDrawing = () => {
-    if (!canvas.value) return;
-
-    canvas.value.on("mouse:down", (options: any) => {
-      if (activeTool.value !== "polygon") return;
-
-      const pointer = canvas.value!.getScenePoint(options.e);
-      const point = { x: pointer.x, y: pointer.y };
-
-      const circle = new Circle({
-        radius: 5,
-        fill: "yellow",
-        left: point.x,
-        top: point.y,
-        selectable: false,
-        originX: "center",
-        originY: "center",
-        evented: false,
-      });
-      canvas.value!.add(circle);
-
-      if (points.value.length === 0) {
-        points.value.push(point);
-      } else {
-        const lastPoint = points.value[points.value.length - 1];
-        if (lastPoint) {
-          const line = new Line([lastPoint.x, lastPoint.y, point.x, point.y], {
-            strokeWidth: 2,
-            fill: "yellow",
-            stroke: "yellow",
-            selectable: false,
-            evented: false,
-          });
-          canvas.value!.add(line);
-        }
-        points.value.push(point);
-      }
-
-      // Create/update temp line for rubberbanding
-      if (tempLine) {
-        canvas.value!.remove(tempLine);
-      }
-      tempLine = new Line([point.x, point.y, point.x, point.y], {
-        strokeWidth: 2,
-        stroke: "yellow",
-        strokeDashArray: [5, 5], // Dashed line
-        selectable: false,
-        evented: false,
-      });
-      canvas.value!.add(tempLine);
-    });
-
-    canvas.value.on("mouse:move", (options: any) => {
-      if (
-        activeTool.value !== "polygon" ||
-        points.value.length === 0 ||
-        !tempLine
-      )
-        return;
-
-      const pointer = canvas.value!.getScenePoint(options.e);
-      // Update the end point of the temp line
-      tempLine.set({ x2: pointer.x, y2: pointer.y });
-      canvas.value!.renderAll();
-    });
-
-    canvas.value.on("mouse:dblclick", () => {
-      if (activeTool.value !== "polygon" || points.value.length < 3) return;
-      finishPolygon();
-    });
-  };
-
-  const finishPolygon = () => {
-    if (!canvas.value) return;
-
-    // Remove temp line
-    if (tempLine && canvas.value) {
-      canvas.value.remove(tempLine);
-      tempLine = null;
-    }
-
-    // Clear temp points/lines (except focusFrame)
-    const objects = canvas.value.getObjects();
-    [...objects].forEach((obj) => {
-      if (
-        obj !== focusFrame &&
-        (obj instanceof Circle || obj instanceof Line)
-      ) {
-        canvas.value!.remove(obj);
-      }
-    });
-
-    const polygon = new Polygon(points.value, {
-      fill: "rgba(255, 255, 255, 0.2)",
-      stroke: "yellow",
-      strokeWidth: 2,
-      selectable: true,
-    });
-
-    canvas.value.add(polygon);
-    activeTool.value = null;
-    canvas.value.selection = true;
-    points.value = [];
-
-    if (canvas.value) {
-      canvas.value.defaultCursor = "default";
-      canvas.value.hoverCursor = "move";
-    }
-  };
-
   const addFrameObject = () => {
     if (!canvas.value) return;
-
     const rect = new Rect({
       left: window.innerWidth / 2,
       top: window.innerHeight / 2,
@@ -211,16 +266,13 @@ export function useFabricMap() {
       originY: "center",
       selectable: true,
     });
-
     canvas.value.add(rect);
     canvas.value.setActiveObject(rect);
   };
 
   const clearFabric = () => {
-    if (canvas.value) {
-      canvas.value.dispose();
-      canvas.value = null;
-    }
+    canvas.value?.dispose();
+    canvas.value = null;
   };
 
   return {

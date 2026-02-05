@@ -1,5 +1,14 @@
 import { ref, shallowRef } from "vue";
-import { Ion, Terrain, Viewer, Cartesian3, Math as CesiumMath } from "cesium";
+import {
+  Ion,
+  Terrain,
+  Viewer,
+  Cartesian3,
+  Math as CesiumMath,
+  Cartesian2,
+  Cartographic,
+} from "cesium";
+import type { Point } from "fabric";
 
 Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ACCESS_TOKEN;
 
@@ -78,10 +87,43 @@ export function useCesium() {
     }
   };
 
+  /**
+   * Convert canvas point to Cartesian by ray
+   * @param point Canvas point {x: 823, y: 412}
+   * @returns Cartesian position { x: 1334821.42,  y: -4659823.77,  z: 4138296.15 }
+   */
+  const canvasPointToCartesianByRay = (point: Point) => {
+    const scene = viewer.value!.scene;
+    const globe = scene.globe;
+
+    const windowPosition = new Cartesian2(point.x, point.y);
+
+    const ray = scene.camera.getPickRay(windowPosition);
+    if (!ray) return null;
+
+    return globe.pick(ray, scene) ?? null;
+  };
+
+  /**
+   * Convert Cartesian to Cartographic
+   * @param cartesian Cartesian position { x: 1334821.42,  y: -4659823.77,  z: 4138296.15 }
+   * @returns Cartographic position { longitude: 123.45, latitude: 67.89, height: 123456 }
+   */
+  const cartesianToCartographic = (cartesian: Cartesian3) => {
+    const cartographic = Cartographic.fromCartesian(cartesian);
+    return {
+      longitude: CesiumMath.toDegrees(cartographic.longitude),
+      latitude: CesiumMath.toDegrees(cartographic.latitude),
+      height: cartographic.height,
+    };
+  };
+
   return {
     viewer,
     isLoading,
     initCesium,
     clearCesium,
+    canvasPointToCartesianByRay,
+    cartesianToCartographic,
   };
 }
