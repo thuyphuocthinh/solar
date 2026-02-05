@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@kyvg/vue3-notification": "^3.4.2",
     "cesium": "^1.137.0",
     "fabric": "^7.1.0",
     "uuid": "^13.0.0",

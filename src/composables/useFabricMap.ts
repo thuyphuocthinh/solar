@@ -1,8 +1,8 @@
 import { ref, markRaw } from "vue";
 import { Canvas, Rect, Circle, Line, Polygon } from "fabric";
 
-type Point = { x: number; y: number };
-type Edge = { from: Point; to: Point };
+export type Point = { x: number; y: number };
+export type Edge = { from: Point; to: Point };
 
 export function useFabricMap() {
   const canvas = ref<Canvas | null>(null);
@@ -24,6 +24,8 @@ export function useFabricMap() {
         width: window.innerWidth,
         height: window.innerHeight,
         selection: false,
+        subTargetCheck: true,
+        perPixelTargetFind: true,
       }),
     );
 
@@ -188,8 +190,14 @@ export function useFabricMap() {
   const finishPolygon = () => {
     if (!canvas.value) return;
 
+    // Remove drawing event listeners to allow polygon interaction
+    canvas.value.off("mouse:down");
+    canvas.value.off("mouse:move");
+    canvas.value.off("mouse:dblclick");
+
     removeTempLine();
 
+    // Remove helper objects
     canvas.value.getObjects().forEach((obj) => {
       if (
         obj !== focusFrame &&
@@ -204,14 +212,37 @@ export function useFabricMap() {
       stroke: "yellow",
       strokeWidth: 2,
       selectable: true,
+      evented: true,
+      hasControls: true,
+      hasBorders: true,
+      lockRotation: false,
+      lockScalingX: false,
+      lockScalingY: false,
+      perPixelTargetFind: false,
+    });
+
+    polygon.setControlsVisibility({
+      mt: false,
+      mb: false,
+      ml: false,
+      mr: false,
     });
 
     canvas.value.add(polygon);
+    canvas.value.selection = true;
+    canvas.value.discardActiveObject();
+    canvas.value.setActiveObject(polygon);
+    polygon.setCoords();
 
+    canvas.value.defaultCursor = "default";
+    canvas.value.hoverCursor = "move";
+    activeTool.value = null;
     points.value = [];
     isClosed = false;
     currentStartPoint = null;
     currentEndPoint = null;
+
+    canvas.value.requestRenderAll();
   };
 
   const handleSelectTool = (type: string) => {
@@ -287,7 +318,7 @@ export function useFabricMap() {
       selectable: true,
       evented: true,
       hasControls: false,
-      lockMovementY: true,
+      lockMovementY: false,
       name: "roof_p1",
     });
 
@@ -301,7 +332,7 @@ export function useFabricMap() {
       selectable: true,
       evented: true,
       hasControls: false,
-      lockMovementY: true,
+      lockMovementY: false,
       name: "roof_p2",
     });
 
@@ -461,5 +492,6 @@ export function useFabricMap() {
     handleSelectTool,
     clearFabric,
     clearTool,
+    finishPolygon,
   };
 }

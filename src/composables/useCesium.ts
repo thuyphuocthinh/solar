@@ -8,7 +8,7 @@ import {
   Cartesian2,
   Cartographic,
 } from "cesium";
-import type { Point } from "fabric";
+import { type Point } from "./useFabricMap";
 
 Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ACCESS_TOKEN;
 
@@ -118,6 +118,31 @@ export function useCesium() {
     };
   };
 
+  const calculateLineLength = (
+    cartesian1: Cartesian3,
+    cartesian2: Cartesian3,
+  ) => {
+    return Cartesian3.distance(cartesian1, cartesian2);
+  };
+
+  const lockCamera = () => {
+    const c = viewer.value!.scene.screenSpaceCameraController;
+    c.enableRotate = false;
+    c.enableZoom = false;
+    c.enableTranslate = false;
+    c.enableTilt = false;
+    c.enableLook = false;
+  };
+
+  const unlockCamera = () => {
+    const c = viewer.value!.scene.screenSpaceCameraController;
+    c.enableRotate = true;
+    c.enableZoom = true;
+    c.enableTranslate = true;
+    c.enableTilt = true;
+    c.enableLook = true;
+  };
+
   return {
     viewer,
     isLoading,
@@ -125,5 +150,8 @@ export function useCesium() {
     clearCesium,
     canvasPointToCartesianByRay,
     cartesianToCartographic,
+    calculateLineLength,
+    lockCamera,
+    unlockCamera,
   };
 }

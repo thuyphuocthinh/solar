@@ -23,18 +23,36 @@ const fabricCanvasRef = ref<HTMLCanvasElement | null>(null);
 const isToolPopupOpen = ref(false);
 
 const {
-  points,
   edges,
   clearTool,
   initFabric,
   handleSelectTool,
   clearFabric,
   activeTool,
+  finishPolygon,
 } = useFabricMap();
-const { initCesium, clearCesium, isLoading } = useCesium();
+const {
+  initCesium,
+  clearCesium,
+  isLoading,
+  canvasPointToCartesianByRay,
+  calculateLineLength,
+  lockCamera,
+} = useCesium();
 
 const toggleToolPopup = () => {
   isToolPopupOpen.value = !isToolPopupOpen.value;
+};
+
+const makeShape = () => {
+  lockCamera();
+  finishPolygon();
+  edges.value.forEach((edge) => {
+    const cartesian1 = canvasPointToCartesianByRay(edge.from);
+    const cartesian2 = canvasPointToCartesianByRay(edge.to);
+    const length = calculateLineLength(cartesian1!, cartesian2!);
+    console.log(length);
+  });
 };
 
 const initAll = async () => {
@@ -110,8 +128,8 @@ onUnmounted(() => {
 
       <!-- Action Buttons -->
       <div
-        v-if="activeTool"
-        class="absolute top-8 left-[72%] z-40 flex flex-col gap-4"
+        v-if="activeTool && edges.length > 0"
+        class="absolute top-8 left-[68%] z-40 flex flex gap-4"
       >
         <AtomButton
           @click="clearTool"
@@ -127,6 +145,19 @@ onUnmounted(() => {
           />
         </AtomButton>
         <!-- Make shape -->
+        <AtomButton
+          @click="makeShape"
+          variant="custom"
+          v-tippy="{ content: 'Make Shape', placement: 'top' }"
+          custom-class="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-600 backdrop-blur text-white border border-white/10 hover:bg-indigo-700"
+        >
+          <AtomIcon
+            name="IconShape"
+            :width="'20px'"
+            :height="'20px'"
+            color="white"
+          />
+        </AtomButton>
         <!-- Ground Height -->
         <!-- Show dimensions -->
         <!-- Create 3d -->

@@ -112,7 +112,7 @@ const features = [
 
 <template>
   <div
-    class="relative w-full h-screen overflow-hidden bg-slate-900 font-sans selection:bg-indigo-500 selection:text-white"
+    class="relative w-full h-screen bg-slate-900 font-sans selection:bg-indigo-500 selection:text-white"
   >
     <!-- Background Image with Overlay -->
     <div class="absolute inset-0 z-0">
