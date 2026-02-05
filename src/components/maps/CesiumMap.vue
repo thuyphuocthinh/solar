@@ -108,6 +108,7 @@ onUnmounted(() => {
     >
       <canvas ref="fabricCanvasRef"></canvas>
 
+      <!-- Action Buttons -->
       <div
         v-if="activeTool"
         class="absolute top-8 left-[72%] z-40 flex flex-col gap-4"
@@ -125,7 +126,6 @@ onUnmounted(() => {
             color="white"
           />
         </AtomButton>
-        <!-- Action Buttons -->
         <!-- Make shape -->
         <!-- Ground Height -->
         <!-- Show dimensions -->

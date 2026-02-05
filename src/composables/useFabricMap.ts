@@ -252,22 +252,190 @@ export function useFabricMap() {
 
   const addFrameObject = () => {
     if (!canvas.value) return;
+
+    const width = 90;
+    const height = 90;
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+
+    // ================= RECT =================
     const rect = new Rect({
-      left: window.innerWidth / 2,
-      top: window.innerHeight / 2,
-      width: 300,
-      height: 300,
+      left: cx,
+      top: cy,
+      width,
+      height,
       fill: "transparent",
-      stroke: "white",
+      stroke: "yellow",
       strokeWidth: 2,
       rx: 4,
       ry: 4,
       originX: "center",
       originY: "center",
-      selectable: true,
+      lockRotation: false,
+      hasRotatingPoint: true,
+      name: "roof_rect",
     });
-    canvas.value.add(rect);
+
+    // ================= RIDGE POINTS =================
+    const p1 = new Circle({
+      left: cx - 20,
+      top: cy,
+      radius: 6,
+      fill: "purple",
+      originX: "center",
+      originY: "center",
+      selectable: true,
+      evented: true,
+      hasControls: false,
+      lockMovementY: true,
+      name: "roof_p1",
+    });
+
+    const p2 = new Circle({
+      left: cx + 20,
+      top: cy,
+      radius: 6,
+      fill: "purple",
+      originX: "center",
+      originY: "center",
+      selectable: true,
+      evented: true,
+      hasControls: false,
+      lockMovementY: true,
+      name: "roof_p2",
+    });
+
+    // ================= LINES =================
+    const createLine = (name: string) =>
+      new Line([0, 0, 0, 0], {
+        stroke: "yellow",
+        strokeWidth: 2,
+        selectable: false,
+        evented: false,
+        name,
+      });
+
+    const lineTL = createLine("roof_line_tl");
+    const lineBL = createLine("roof_line_bl");
+    const lineTR = createLine("roof_line_tr");
+    const lineBR = createLine("roof_line_br");
+    const lineRidge = createLine("roof_line_ridge");
+
+    // ================= HELPERS =================
+    const rotatePointAround = (
+      p: { x: number; y: number },
+      center: { x: number; y: number },
+      angleRad: number,
+    ) => {
+      const cos = Math.cos(angleRad);
+      const sin = Math.sin(angleRad);
+
+      const dx = p.x - center.x;
+      const dy = p.y - center.y;
+
+      return {
+        x: center.x + dx * cos - dy * sin,
+        y: center.y + dx * sin + dy * cos,
+      };
+    };
+
+    const clampRidgePoint = (p: Circle) => {
+      rect.setCoords();
+      const { tl, tr } = rect.aCoords;
+
+      const padding = 10;
+      const minX = tl.x + padding;
+      const maxX = tr.x - padding;
+
+      if (p.left < minX) p.set({ left: minX });
+      if (p.left > maxX) p.set({ left: maxX });
+    };
+
+    const updateLines = () => {
+      rect.setCoords();
+
+      const { tl, tr, bl, br } = rect.aCoords;
+
+      lineTL.set({ x1: tl.x, y1: tl.y, x2: p1.left, y2: p1.top });
+      lineBL.set({ x1: bl.x, y1: bl.y, x2: p1.left, y2: p1.top });
+      lineTR.set({ x1: tr.x, y1: tr.y, x2: p2.left, y2: p2.top });
+      lineBR.set({ x1: br.x, y1: br.y, x2: p2.left, y2: p2.top });
+      lineRidge.set({ x1: p1.left, y1: p1.top, x2: p2.left, y2: p2.top });
+
+      canvas.value!.requestRenderAll();
+    };
+
+    // ================= INIT =================
+    updateLines();
+
+    let lastLeft = rect.left!;
+    let lastTop = rect.top!;
+    let lastAngle = rect.angle || 0;
+
+    // ================= EVENTS =================
+    rect.on("moving", () => {
+      const dx = rect.left! - lastLeft;
+      const dy = rect.top! - lastTop;
+
+      p1.set({ left: p1.left! + dx, top: p1.top! + dy });
+      p2.set({ left: p2.left! + dx, top: p2.top! + dy });
+
+      lastLeft = rect.left!;
+      lastTop = rect.top!;
+      updateLines();
+    });
+
+    rect.on("rotating", () => {
+      const newAngle = rect.angle || 0;
+      const deltaRad = (newAngle - lastAngle) * (Math.PI / 180);
+
+      const center = { x: rect.left!, y: rect.top! };
+
+      const p1New = rotatePointAround(
+        { x: p1.left!, y: p1.top! },
+        center,
+        deltaRad,
+      );
+      const p2New = rotatePointAround(
+        { x: p2.left!, y: p2.top! },
+        center,
+        deltaRad,
+      );
+
+      p1.set({ left: p1New.x, top: p1New.y });
+      p2.set({ left: p2New.x, top: p2New.y });
+
+      lastAngle = newAngle;
+      updateLines();
+    });
+
+    rect.on("scaling", updateLines);
+
+    rect.on("modified", () => {
+      lastLeft = rect.left!;
+      lastTop = rect.top!;
+      lastAngle = rect.angle || 0;
+      updateLines();
+    });
+
+    p1.on("moving", () => {
+      clampRidgePoint(p1);
+      updateLines();
+    });
+
+    p2.on("moving", () => {
+      clampRidgePoint(p2);
+      updateLines();
+    });
+
+    // ================= ADD =================
+    canvas.value.add(rect, lineTL, lineBL, lineTR, lineBR, lineRidge, p1, p2);
+
+    (canvas.value as any).bringToFront(p1);
+    (canvas.value as any).bringToFront(p2);
+
     canvas.value.setActiveObject(rect);
+    canvas.value.requestRenderAll();
   };
 
   const clearFabric = () => {
