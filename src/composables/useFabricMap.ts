@@ -222,21 +222,19 @@ export function useFabricMap() {
     });
 
     polygon.setControlsVisibility({
-      mt: false,
-      mb: false,
-      ml: false,
-      mr: false,
+      mt: true,
+      mb: true,
+      ml: true,
+      mr: true,
     });
 
     canvas.value.add(polygon);
     canvas.value.selection = true;
-    canvas.value.discardActiveObject();
     canvas.value.setActiveObject(polygon);
     polygon.setCoords();
 
     canvas.value.defaultCursor = "default";
     canvas.value.hoverCursor = "move";
-    activeTool.value = null;
     points.value = [];
     isClosed = false;
     currentStartPoint = null;

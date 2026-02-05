@@ -38,6 +38,7 @@ const {
   canvasPointToCartesianByRay,
   calculateLineLength,
   lockCamera,
+  unlockCamera,
 } = useCesium();
 
 const toggleToolPopup = () => {
@@ -79,12 +80,21 @@ const clearAll = () => {
   clearFabric();
 };
 
+const keyboardListener = (e: KeyboardEvent) => {
+  if (e.key === "Backspace" || e.key === "Delete") {
+    clearTool();
+    unlockCamera();
+  }
+};
+
 onMounted(async () => {
   await initAll();
+  document.addEventListener("keydown", keyboardListener);
 });
 
 onUnmounted(() => {
   clearAll();
+  document.removeEventListener("keydown", keyboardListener);
 });
 </script>
 
@@ -96,7 +106,7 @@ onUnmounted(() => {
       <slot></slot>
 
       <!-- Tools Button -->
-      <div class="relative top-4 left-4">
+      <div class="relative top-2 left-2">
         <AtomButton
           @click="toggleToolPopup"
           variant="custom"
@@ -128,11 +138,16 @@ onUnmounted(() => {
 
       <!-- Action Buttons -->
       <div
-        v-if="activeTool && edges.length > 0"
+        v-if="activeTool"
         class="absolute top-8 left-[68%] z-40 flex flex gap-4"
       >
         <AtomButton
-          @click="clearTool"
+          @click="
+            () => {
+              clearTool();
+              unlockCamera();
+            }
+          "
           variant="custom"
           v-tippy="{ content: 'Clear', placement: 'top' }"
           custom-class="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-600 backdrop-blur text-white border border-white/10 hover:bg-indigo-700"

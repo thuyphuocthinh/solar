@@ -8,7 +8,7 @@ import {
   Cartesian2,
   Cartographic,
 } from "cesium";
-import { type Point } from "./useFabricMap";
+import { type Edge, type Point } from "./useFabricMap";
 
 Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ACCESS_TOKEN;
 
@@ -125,6 +125,50 @@ export function useCesium() {
     return Cartesian3.distance(cartesian1, cartesian2);
   };
 
+  const calculateTriangleArea = (
+    cartesian1: Cartesian3,
+    cartesian2: Cartesian3,
+    cartesian3: Cartesian3,
+  ) => {
+    const a = calculateLineLength(cartesian1, cartesian2);
+    const b = calculateLineLength(cartesian2, cartesian3);
+    const c = calculateLineLength(cartesian3, cartesian1);
+    const s = (a + b + c) / 2;
+    return Math.sqrt(s * (s - a) * (s - b) * (s - c));
+  };
+
+  const calculateQuadrilateralArea = (
+    cartesian1: Cartesian3,
+    cartesian2: Cartesian3,
+    cartesian3: Cartesian3,
+    cartesian4: Cartesian3,
+  ) => {
+    const a = calculateTriangleArea(cartesian1, cartesian2, cartesian3);
+    const b = calculateTriangleArea(cartesian1, cartesian3, cartesian4);
+    return a + b;
+  };
+
+  const calculateShapeArea = (edges: Edge[]) => {
+    const numEdges = edges.length;
+
+    if (numEdges === 3) {
+      return calculateTriangleArea(
+        canvasPointToCartesianByRay(edges[0]!.from)!,
+        canvasPointToCartesianByRay(edges[0]!.to)!,
+        canvasPointToCartesianByRay(edges[1]!.to)!,
+      );
+    }
+    if (numEdges === 4) {
+      return calculateQuadrilateralArea(
+        canvasPointToCartesianByRay(edges[0]!.from)!,
+        canvasPointToCartesianByRay(edges[0]!.to)!,
+        canvasPointToCartesianByRay(edges[1]!.to)!,
+        canvasPointToCartesianByRay(edges[2]!.to)!,
+      );
+    }
+    return 0;
+  };
+
   const lockCamera = () => {
     const c = viewer.value!.scene.screenSpaceCameraController;
     c.enableRotate = false;
@@ -153,5 +197,6 @@ export function useCesium() {
     calculateLineLength,
     lockCamera,
     unlockCamera,
+    calculateShapeArea,
   };
 }
