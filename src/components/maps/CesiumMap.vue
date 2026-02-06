@@ -24,12 +24,13 @@ const isToolPopupOpen = ref(false);
 
 const {
   edges,
+  points,
   clearTool,
   initFabric,
   handleSelectTool,
   clearFabric,
   activeTool,
-  finishPolygon,
+  makeAndBeautifyShape,
 } = useFabricMap();
 const {
   initCesium,
@@ -39,6 +40,7 @@ const {
   calculateLineLength,
   lockCamera,
   unlockCamera,
+  calculateShapeArea,
 } = useCesium();
 
 const toggleToolPopup = () => {
@@ -47,13 +49,15 @@ const toggleToolPopup = () => {
 
 const makeShape = () => {
   lockCamera();
-  finishPolygon();
-  edges.value.forEach((edge) => {
-    const cartesian1 = canvasPointToCartesianByRay(edge.from);
-    const cartesian2 = canvasPointToCartesianByRay(edge.to);
-    const length = calculateLineLength(cartesian1!, cartesian2!);
-    console.log(length);
-  });
+  makeAndBeautifyShape();
+  console.log("edges", edges.value);
+  console.log("points", points.value);
+  // edges.value.forEach((edge) => {
+  //   const cartesian1 = canvasPointToCartesianByRay(edge.from);
+  //   const cartesian2 = canvasPointToCartesianByRay(edge.to);
+  //   const length = calculateLineLength(cartesian1!, cartesian2!);
+  //   console.log(length);
+  // });
 };
 
 const initAll = async () => {
@@ -139,7 +143,7 @@ onUnmounted(() => {
       <!-- Action Buttons -->
       <div
         v-if="activeTool"
-        class="absolute top-8 left-[68%] z-40 flex flex gap-4"
+        class="absolute top-6 left-20 z-40 flex gap-2 sm:gap-4"
       >
         <AtomButton
           @click="

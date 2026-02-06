@@ -13,16 +13,21 @@ export function useFabricMap() {
   let focusFrame: Rect | null = null;
   let tempLine: Line | null = null;
   let isClosed = false;
+  let resizeHandler: (() => void) | null = null;
 
   // Track current start/end points for flexible polygon drawing
   let currentStartPoint: Point | null = null;
   let currentEndPoint: Point | null = null;
 
   const initFabric = (canvasElement: HTMLCanvasElement) => {
+    const parent = canvasElement.parentElement;
+    const width = parent?.clientWidth || window.innerWidth;
+    const height = parent?.clientHeight || window.innerHeight;
+
     canvas.value = markRaw(
       new Canvas(canvasElement, {
-        width: window.innerWidth,
-        height: window.innerHeight,
+        width,
+        height,
         selection: false,
         subTargetCheck: true,
         perPixelTargetFind: true,
@@ -30,10 +35,10 @@ export function useFabricMap() {
     );
 
     const rect = new Rect({
-      left: window.innerWidth / 2,
-      top: window.innerHeight / 2 - 70,
-      width: 700,
-      height: 400,
+      left: width / 2,
+      top: height / 2 - 70,
+      width: Math.min(700, width * 0.8),
+      height: Math.min(400, height * 0.6),
       fill: "transparent",
       stroke: "white",
       strokeWidth: 4,
@@ -45,6 +50,26 @@ export function useFabricMap() {
 
     canvas.value.add(rect);
     focusFrame = rect;
+
+    // Handle resize
+    resizeHandler = () => {
+      if (!canvas.value) return;
+      const newWidth = parent?.clientWidth || window.innerWidth;
+      const newHeight = parent?.clientHeight || window.innerHeight;
+      canvas.value.setDimensions({ width: newWidth, height: newHeight });
+
+      if (focusFrame) {
+        focusFrame.set({
+          left: newWidth / 2,
+          top: newHeight / 2 - 50,
+          width: Math.min(700, newWidth * 0.8),
+          height: Math.min(400, newHeight * 0.6),
+        });
+        focusFrame.setCoords();
+      }
+      canvas.value.requestRenderAll();
+    };
+    window.addEventListener("resize", resizeHandler);
   };
 
   const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -185,6 +210,84 @@ export function useFabricMap() {
       if (activeTool.value !== "polygon" || points.value.length < 3) return;
       finishPolygon();
     });
+  };
+
+  const makeAndBeautifyShape = () => {
+    switch (activeTool.value) {
+      case "polygon":
+        finishPolygon();
+        break;
+      case "frame":
+        const frameResult = getPointsAndEdgesFromFrame();
+        if (frameResult) {
+          points.value = frameResult.points;
+          edges.value = frameResult.edges;
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
+  const getPointsAndEdgesFromFrame = () => {
+    if (!canvas.value) return;
+
+    const rect = canvas.value
+      .getObjects()
+      .find((o) => (o as any).name === "roof_rect") as Rect | undefined;
+
+    if (!rect) return;
+
+    // tìm ridge points
+    const p1 = canvas.value
+      .getObjects()
+      .find((o) => (o as any).name === "roof_p1") as Circle | undefined;
+
+    const p2 = canvas.value
+      .getObjects()
+      .find((o) => (o as any).name === "roof_p2") as Circle | undefined;
+
+    if (!p1 || !p2) return;
+
+    // cập nhật aCoords cho tất cả objects
+    rect.setCoords();
+    p1.setCoords();
+    p2.setCoords();
+
+    const { tl, tr, bl, br } = rect.aCoords!;
+
+    // Lấy tọa độ tâm thực tế của ridge points
+    const p1Center = p1.getCenterPoint();
+    const p2Center = p2.getCenterPoint();
+
+    // ================= POINTS =================
+    const points: Point[] = [
+      { x: tl.x, y: tl.y },
+      { x: tr.x, y: tr.y },
+      { x: bl.x, y: bl.y },
+      { x: br.x, y: br.y },
+      { x: p1Center.x, y: p1Center.y },
+      { x: p2Center.x, y: p2Center.y },
+    ];
+
+    // ================= EDGES =================
+    // Points: [0]=tl, [1]=tr, [2]=bl, [3]=br, [4]=p1, [5]=p2
+    const edges: Edge[] = [
+      // 4 rectangle edges
+      { from: points[0]!, to: points[1]! }, // tl -> tr (top)
+      { from: points[2]!, to: points[3]! }, // bl -> br (bottom)
+      { from: points[0]!, to: points[2]! }, // tl -> bl (left)
+      { from: points[1]!, to: points[3]! }, // tr -> br (right)
+      // 4 hip lines
+      { from: points[0]!, to: points[4]! }, // tl -> p1
+      { from: points[2]!, to: points[4]! }, // bl -> p1
+      { from: points[1]!, to: points[5]! }, // tr -> p2
+      { from: points[3]!, to: points[5]! }, // br -> p2
+      // 1 ridge line
+      { from: points[4]!, to: points[5]! }, // p1 -> p2
+    ];
+
+    return { points, edges };
   };
 
   const finishPolygon = () => {
@@ -460,14 +563,15 @@ export function useFabricMap() {
     // ================= ADD =================
     canvas.value.add(rect, lineTL, lineBL, lineTR, lineBR, lineRidge, p1, p2);
 
-    (canvas.value as any).bringToFront(p1);
-    (canvas.value as any).bringToFront(p2);
-
     canvas.value.setActiveObject(rect);
     canvas.value.requestRenderAll();
   };
 
   const clearFabric = () => {
+    if (resizeHandler) {
+      window.removeEventListener("resize", resizeHandler);
+      resizeHandler = null;
+    }
     canvas.value?.dispose();
     canvas.value = null;
   };
@@ -490,6 +594,6 @@ export function useFabricMap() {
     handleSelectTool,
     clearFabric,
     clearTool,
-    finishPolygon,
+    makeAndBeautifyShape,
   };
 }
