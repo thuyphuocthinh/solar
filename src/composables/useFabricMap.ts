@@ -213,6 +213,13 @@ export function useFabricMap() {
   };
 
   const makeAndBeautifyShape = () => {
+    if (!canvas.value) return;
+    canvas.value.off("mouse:down");
+    canvas.value.off("mouse:move");
+    canvas.value.off("mouse:dblclick");
+    canvas.value.defaultCursor = "default";
+    canvas.value.hoverCursor = "move";
+    canvas.value.requestRenderAll();
     switch (activeTool.value) {
       case "polygon":
         finishPolygon();
@@ -292,15 +299,6 @@ export function useFabricMap() {
 
   const finishPolygon = () => {
     if (!canvas.value) return;
-
-    // Remove drawing event listeners to allow polygon interaction
-    canvas.value.off("mouse:down");
-    canvas.value.off("mouse:move");
-    canvas.value.off("mouse:dblclick");
-
-    removeTempLine();
-
-    // Remove helper objects
     canvas.value.getObjects().forEach((obj) => {
       if (
         obj !== focusFrame &&
@@ -309,7 +307,6 @@ export function useFabricMap() {
         canvas.value!.remove(obj);
       }
     });
-
     const polygon = new Polygon(points.value, {
       fill: "rgba(255,255,255,0.2)",
       stroke: "yellow",
@@ -335,15 +332,10 @@ export function useFabricMap() {
     canvas.value.selection = true;
     canvas.value.setActiveObject(polygon);
     polygon.setCoords();
-
-    canvas.value.defaultCursor = "default";
-    canvas.value.hoverCursor = "move";
     points.value = [];
     isClosed = false;
     currentStartPoint = null;
     currentEndPoint = null;
-
-    canvas.value.requestRenderAll();
   };
 
   const handleSelectTool = (type: string) => {
