@@ -16,14 +16,17 @@ const props = defineProps<{
   } | null;
 }>();
 
-const emit = defineEmits(["loaded"]);
+const emit = defineEmits(["loaded", "showHouse3d"]);
 
 const containerRef = ref<HTMLElement | null>(null);
 const fabricCanvasRef = ref<HTMLCanvasElement | null>(null);
 const isToolPopupOpen = ref(false);
+const isShapeMade = ref(false);
+const currentRoofData = ref<ReturnType<typeof getRoofDataForThreeJS> | null>(
+  null,
+);
 
 const {
-  edges,
   points,
   clearTool,
   initFabric,
@@ -36,28 +39,73 @@ const {
   initCesium,
   clearCesium,
   isLoading,
-  canvasPointToCartesianByRay,
-  calculateLineLength,
+  smartPickCartesian,
+  getGroundHeight,
+  cartesianToCartographic,
   lockCamera,
   unlockCamera,
-  calculateShapeArea,
+  getRoofDataForThreeJS,
 } = useCesium();
 
 const toggleToolPopup = () => {
   isToolPopupOpen.value = !isToolPopupOpen.value;
 };
 
-const makeShape = () => {
+const makeShape = async () => {
   lockCamera();
   makeAndBeautifyShape();
-  console.log("edges", edges.value);
-  console.log("points", points.value);
-  // edges.value.forEach((edge) => {
-  //   const cartesian1 = canvasPointToCartesianByRay(edge.from);
-  //   const cartesian2 = canvasPointToCartesianByRay(edge.to);
-  //   const length = calculateLineLength(cartesian1!, cartesian2!);
-  //   console.log(length);
-  // });
+
+  // Convert canvas points to Cesium Cartesian3 coordinates
+  const cartesianPoints = points.value
+    .map((p) => smartPickCartesian(p))
+    .filter((c): c is NonNullable<typeof c> => c !== null);
+
+  if (cartesianPoints.length < 4) {
+    console.warn("Need at least 4 points to create a hip roof");
+    return;
+  }
+
+  const roofCorners = cartesianPoints.slice(0, 4);
+
+  let ridgePoints =
+    cartesianPoints.length >= 6 ? cartesianPoints.slice(4, 6) : [];
+
+  console.log("Roof Corners (Cartesian3):", roofCorners);
+  console.log("Ridge Points (Cartesian3):", ridgePoints);
+
+  // Get roof data for Three.js
+  if (roofCorners.length === 4 && ridgePoints.length >= 2) {
+    const roofData = getRoofDataForThreeJS(roofCorners, ridgePoints);
+    console.log("Roof Data for Three.js:", roofData);
+
+    if (roofData) {
+      currentRoofData.value = roofData;
+      isShapeMade.value = true;
+
+      // Log face slopes
+      roofData.faces.forEach((face, i) => {
+        console.log(`Face ${i + 1} slope: ${face.slopeAngle.toFixed(2)}°`);
+      });
+    }
+  } else {
+    console.log("Calculating individual point data...");
+
+    // Fallback: Calculate height data for each point
+    for (const cartesian of cartesianPoints) {
+      const cartographic = cartesianToCartographic(cartesian);
+      const groundHeight = await getGroundHeight(
+        cartographic.longitude,
+        cartographic.latitude,
+      );
+      console.log({
+        longitude: cartographic.longitude,
+        latitude: cartographic.latitude,
+        roofHeight: cartographic.height,
+        groundHeight,
+        buildingHeight: cartographic.height - groundHeight,
+      });
+    }
+  }
 };
 
 const initAll = async () => {
@@ -82,12 +130,22 @@ const initAll = async () => {
 const clearAll = () => {
   clearCesium();
   clearFabric();
+  isShapeMade.value = false;
+  currentRoofData.value = null;
 };
 
 const keyboardListener = (e: KeyboardEvent) => {
   if (e.key === "Backspace" || e.key === "Delete") {
     clearTool();
     unlockCamera();
+    isShapeMade.value = false;
+    currentRoofData.value = null;
+  }
+};
+
+const handleShowHouse3d = () => {
+  if (currentRoofData.value) {
+    emit("showHouse3d", currentRoofData.value);
   }
 };
 
@@ -145,11 +203,15 @@ onUnmounted(() => {
         v-if="activeTool"
         class="absolute top-6 left-20 z-40 flex gap-2 sm:gap-4"
       >
+        <!-- Clear button - hidden after shape made -->
         <AtomButton
+          v-if="!isShapeMade"
           @click="
             () => {
               clearTool();
               unlockCamera();
+              isShapeMade = false;
+              currentRoofData = null;
             }
           "
           variant="custom"
@@ -163,8 +225,10 @@ onUnmounted(() => {
             color="white"
           />
         </AtomButton>
-        <!-- Make shape -->
+
+        <!-- Make shape button - hidden after shape made -->
         <AtomButton
+          v-if="!isShapeMade"
           @click="makeShape"
           variant="custom"
           v-tippy="{ content: 'Make Shape', placement: 'top' }"
@@ -177,9 +241,46 @@ onUnmounted(() => {
             color="white"
           />
         </AtomButton>
-        <!-- Ground Height -->
-        <!-- Show dimensions -->
-        <!-- Create 3d -->
+
+        <!-- Show House 3D button - shown after shape made -->
+        <AtomButton
+          v-if="isShapeMade && currentRoofData"
+          @click="handleShowHouse3d"
+          variant="custom"
+          v-tippy="{ content: 'Show House 3D', placement: 'top' }"
+          custom-class="h-10 px-4 flex items-center justify-center gap-2 rounded-full bg-green-600 backdrop-blur text-white border border-white/10 hover:bg-green-700"
+        >
+          <AtomIcon
+            name="IconCube"
+            :width="'20px'"
+            :height="'20px'"
+            color="white"
+          />
+          <span class="text-sm font-medium">Show 3D</span>
+        </AtomButton>
+
+        <!-- Reset button - shown after shape made -->
+        <AtomButton
+          v-if="isShapeMade"
+          @click="
+            () => {
+              clearTool();
+              unlockCamera();
+              isShapeMade = false;
+              currentRoofData = null;
+            }
+          "
+          variant="custom"
+          v-tippy="{ content: 'Reset', placement: 'top' }"
+          custom-class="w-10 h-10 flex items-center justify-center rounded-full bg-red-600 backdrop-blur text-white border border-white/10 hover:bg-red-700"
+        >
+          <AtomIcon
+            name="IconClear"
+            :width="'20px'"
+            :height="'20px'"
+            color="white"
+          />
+        </AtomButton>
       </div>
     </div>
 

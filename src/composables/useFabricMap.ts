@@ -332,7 +332,6 @@ export function useFabricMap() {
     canvas.value.selection = true;
     canvas.value.setActiveObject(polygon);
     polygon.setCoords();
-    points.value = [];
     isClosed = false;
     currentStartPoint = null;
     currentEndPoint = null;

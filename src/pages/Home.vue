@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import CesiumMap from "@/components/maps/CesiumMap.vue";
-import { ref, watch, computed } from "vue";
+import { ref, watch, computed, onUnmounted } from "vue";
 import { debounce } from "@/utils/debounce";
 import AtomInput from "@/components/atoms/AtomInput.vue";
 import AtomButton from "@/components/atoms/AtomButton.vue";
@@ -8,6 +8,8 @@ import AtomModal from "@/components/atoms/AtomModal.vue";
 import AtomIcon from "@/components/atoms/AtomIcon.vue";
 import AtomNotFound from "@/components/atoms/AtomNotFound.vue";
 import heroBg from "@/assets/hero-bg.png";
+import RecreateHouse3d from "@/components/maps/RecreateHouse3d.vue";
+import type { HouseData } from "@/composables/useThreeJs";
 
 const isMapActive = ref(false);
 const showAddressModal = ref(false);
@@ -15,6 +17,7 @@ const addressInput = ref("");
 const searchAddress = ref("");
 const suggestions = ref<any[]>([]);
 const isSearching = ref(false);
+const house3dData = ref<HouseData | null>(null);
 const searchCoordinates = ref<{ longitude: number; latitude: number } | null>(
   null,
 );
@@ -108,6 +111,26 @@ const features = [
     desc: "Calculate potential energy generation tailored to you.",
   },
 ];
+
+const clearAll = () => {
+  house3dData.value = null;
+  searchAddress.value = "";
+  searchCoordinates.value = null;
+  addressInput.value = "";
+  suggestions.value = [];
+  isSearching.value = false;
+  isMapActive.value = false;
+};
+
+watch(isMapActive, (newVal: boolean) => {
+  if (!newVal) {
+    clearAll();
+  }
+});
+
+onUnmounted(() => {
+  clearAll();
+});
 </script>
 
 <template>
@@ -234,7 +257,7 @@ const features = [
               <AtomInput
                 v-model="addressInput"
                 @input="onInput"
-                @keyup.enter="startMap"
+                @keyup.enter="onInput"
                 placeholder="Search address, city, or zip..."
                 autofocus
                 class="pl-10 h-12 border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full bg-slate-50"
@@ -295,10 +318,18 @@ const features = [
       </template>
       <div class="w-full h-full relative overflow-hidden">
         <CesiumMap
+          v-if="!house3dData"
           :initial-address="searchAddress"
           :initial-coordinates="searchCoordinates"
+          @show-house3d="
+            (data: HouseData) => {
+              console.log('data: ', data);
+              house3dData = data;
+            }
+          "
         />
         <!-- Recreate Roof 3D will be here -->
+        <RecreateHouse3d v-if="house3dData" :house-data="house3dData" />
       </div>
     </AtomModal>
   </div>
