@@ -58,14 +58,14 @@ const makeShape = async () => {
   console.log("points: ", points.value);
   console.log("sub polygons: ", getSubPolygons());
   for (const point of points.value) {
-    const cartesian = smartPickCartesian(point);
-    console.log("canvas to cartesian: ", cartesian);
-    const cartographic = cartesianToCartographic(cartesian!);
-    console.log("cartesian to cartographic: ", cartographic);
-    console.log(
-      "ground height: ",
-      await getGroundHeight(cartographic!.longitude, cartographic!.latitude),
-    );
+    // const cartesian = smartPickCartesian(point);
+    // console.log("canvas to cartesian: ", cartesian);
+    // const cartographic = cartesianToCartographic(cartesian!);
+    // console.log("cartesian to cartographic: ", cartographic);
+    // console.log(
+    //   "ground height: ",
+    //   await getGroundHeight(cartographic!.longitude, cartographic!.latitude),
+    // );
   }
 };
 

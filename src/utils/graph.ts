@@ -1,3 +1,19 @@
+/**
+ * THUẬT TOÁN TÌM SUB-POLYGONS (MINIMAL FACES) TỪ PLANAR GRAPH
+ *
+ * Input: points[] và edges[] tạo thành một planar graph (đồ thị phẳng)
+ * Output: Mảng các sub-polygon (các mặt bên trong, không bao gồm outer boundary)
+ *
+ * Các bước:
+ * 1. buildAdjacencyList: Xây adjacency list, sắp xếp neighbors theo góc (CCW)
+ * 2. traceFace: Với mỗi directed edge, đi theo chiều clockwise để trace một face
+ *    - Tại mỗi đỉnh, chọn neighbor "tiếp theo" (prev - 1 trong sorted list)
+ *    - Khi quay về điểm bắt đầu → hoàn thành 1 face
+ * 3. Lọc bỏ duplicate faces và faces không hợp lệ (area = 0)
+ * 4. Loại bỏ outer boundary (face có diện tích lớn nhất)
+ *
+ * Ví dụ hip roof: 6 points, 9 edges → 5 faces → loại outer → 4 sub-polygons
+ */
 import type { Edge, Point, SubPolygon } from "@/composables/useFabricMap";
 
 const EPSILON = 0.0001;
@@ -83,6 +99,17 @@ const isSameFace = (f1: number[], f2: number[]) =>
   [...f1].sort((a, b) => a - b).join(",") ===
     [...f2].sort((a, b) => a - b).join(",");
 
+const getFaceArea = (points: Point[], faceIndices: number[]) => {
+  let area = 0;
+  const n = faceIndices.length;
+  for (let i = 0; i < n; i++) {
+    const curr = points[faceIndices[i]!]!;
+    const next = points[faceIndices[(i + 1) % n]!]!;
+    area += curr.x * next.y - next.x * curr.y;
+  }
+  return Math.abs(area) / 2;
+};
+
 export const getSubPolygons = (
   points: Point[],
   edges: Edge[],
@@ -113,7 +140,13 @@ export const getSubPolygons = (
     });
   });
 
+  if (faces.length <= 1)
+    return faces.map((f) => f.map((idx) => ({ ...points[idx]! })));
+
+  const faceAreas = faces.map((f) => getFaceArea(points, f));
+  const maxAreaIndex = faceAreas.indexOf(Math.max(...faceAreas));
+
   return faces
-    .filter((f) => f.length < points.length)
+    .filter((_, i) => i !== maxAreaIndex)
     .map((f) => f.map((idx) => ({ ...points[idx]! })));
 };
