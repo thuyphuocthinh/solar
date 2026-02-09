@@ -1,8 +1,10 @@
 import { ref, markRaw } from "vue";
-import { Canvas, Rect, Circle, Line, Polygon } from "fabric";
+import { Canvas, Rect, Circle, Line, Group } from "fabric";
+import { getSubPolygons as getSubPolygonsFromGraph } from "@/utils/graph";
 
 export type Point = { x: number; y: number };
 export type Edge = { from: Point; to: Point };
+export type SubPolygon = Point[];
 
 export function useFabricMap() {
   const canvas = ref<Canvas | null>(null);
@@ -164,6 +166,16 @@ export function useFabricMap() {
     );
   };
 
+  const moveExistingPointToLast = (p: Point) => {
+    const index = points.value.findIndex((point) => isNearPoint(p, point));
+    if (index !== -1) {
+      const point = points.value[index];
+      points.value.splice(index, 1);
+      points.value.push(point!);
+      currentEndPoint = point!;
+    }
+  };
+
   const setupPolygonDrawing = () => {
     if (!canvas.value) return;
 
@@ -172,12 +184,12 @@ export function useFabricMap() {
 
       const pointer = canvas.value!.getScenePoint(opt.e);
       const point = { x: pointer.x, y: pointer.y };
-
       const nearExistingPoint = findNearPoint(point);
 
       if (isClosed) {
         if (nearExistingPoint) {
           // Start from existing point, don't add new point
+          moveExistingPointToLast(nearExistingPoint);
           openPolygonAgain(nearExistingPoint);
         } else {
           // Add new point and start from there
@@ -187,14 +199,13 @@ export function useFabricMap() {
         return;
       }
 
-      // Case 2: Click near an existing point → close polygon
+      // Case 2: Click near an existing point -> close polygon
       if (nearExistingPoint && points.value.length >= 3) {
         // Close polygon to the near existing point
         closePolygon(nearExistingPoint);
         return;
       }
 
-      // Case 3: Normal case → add new point
       addPoint(point);
     });
 
@@ -299,18 +310,16 @@ export function useFabricMap() {
 
   const finishPolygon = () => {
     if (!canvas.value) return;
-    canvas.value.getObjects().forEach((obj) => {
-      if (
-        obj !== focusFrame &&
-        (obj instanceof Line || obj instanceof Circle)
-      ) {
-        canvas.value!.remove(obj);
-      }
-    });
-    const polygon = new Polygon(points.value, {
-      fill: "rgba(255,255,255,0.2)",
-      stroke: "yellow",
-      strokeWidth: 2,
+
+    // 1. Lấy toàn bộ object mái (line + circle)
+    const roofObjects = canvas.value
+      .getObjects()
+      .filter((obj) => obj instanceof Line || obj instanceof Circle);
+
+    if (roofObjects.length === 0) return;
+
+    // 2. Tạo group
+    const roofGroup = new Group(roofObjects, {
       selectable: true,
       evented: true,
       hasControls: true,
@@ -318,23 +327,42 @@ export function useFabricMap() {
       lockRotation: false,
       lockScalingX: false,
       lockScalingY: false,
-      perPixelTargetFind: false,
     });
 
-    polygon.setControlsVisibility({
+    // 3. Control giống polygon
+    roofGroup.setControlsVisibility({
       mt: true,
       mb: true,
       ml: true,
       mr: true,
+      tl: true,
+      tr: true,
+      bl: true,
+      br: true,
+      mtr: true,
     });
 
-    canvas.value.add(polygon);
-    canvas.value.selection = true;
-    canvas.value.setActiveObject(polygon);
-    polygon.setCoords();
+    // 4. Clear selection cũ
+    canvas.value.discardActiveObject();
+
+    // 5. Add group & active
+    canvas.value.add(roofGroup);
+    canvas.value.setActiveObject(roofGroup);
+    roofGroup.setCoords();
+
+    // reset state vẽ
     isClosed = false;
     currentStartPoint = null;
     currentEndPoint = null;
+  };
+
+  const getSubPolygons = (): SubPolygon[] => {
+    const result =
+      activeTool.value === "polygon"
+        ? { points: points.value, edges: edges.value }
+        : getPointsAndEdgesFromFrame();
+    if (!result) return [];
+    return getSubPolygonsFromGraph(result.points, result.edges);
   };
 
   const handleSelectTool = (type: string) => {
@@ -390,8 +418,7 @@ export function useFabricMap() {
       fill: "transparent",
       stroke: "yellow",
       strokeWidth: 2,
-      rx: 4,
-      ry: 4,
+      strokeUniform: true,
       originX: "center",
       originY: "center",
       lockRotation: false,
@@ -409,7 +436,7 @@ export function useFabricMap() {
       originY: "center",
       selectable: true,
       evented: true,
-      hasControls: false,
+      hasControls: true,
       lockMovementY: false,
       name: "roof_p1",
     });
@@ -423,7 +450,7 @@ export function useFabricMap() {
       originY: "center",
       selectable: true,
       evented: true,
-      hasControls: false,
+      hasControls: true,
       lockMovementY: false,
       name: "roof_p2",
     });
@@ -433,6 +460,7 @@ export function useFabricMap() {
       new Line([0, 0, 0, 0], {
         stroke: "yellow",
         strokeWidth: 2,
+        strokeUniform: true,
         selectable: false,
         evented: false,
         name,
@@ -464,14 +492,31 @@ export function useFabricMap() {
 
     const clampRidgePoint = (p: Circle) => {
       rect.setCoords();
-      const { tl, tr } = rect.aCoords;
+      const { tl, tr, bl, br } = rect.aCoords;
 
-      const padding = 10;
-      const minX = tl.x + padding;
-      const maxX = tr.x - padding;
+      // Tính điểm giữa của cạnh trái và cạnh phải (ridge line nằm ở giữa rect)
+      const midLeft = { x: (tl.x + bl.x) / 2, y: (tl.y + bl.y) / 2 };
+      const midRight = { x: (tr.x + br.x) / 2, y: (tr.y + br.y) / 2 };
 
-      if (p.left < minX) p.set({ left: minX });
-      if (p.left > maxX) p.set({ left: maxX });
+      // Ridge direction (theo chiều ngang của rect đã xoay)
+      const ridgeDir = { x: midRight.x - midLeft.x, y: midRight.y - midLeft.y };
+      const ridgeLenSq = ridgeDir.x ** 2 + ridgeDir.y ** 2;
+      const ridgeLen = Math.sqrt(ridgeLenSq);
+
+      // Project vị trí hiện tại của p lên ridge line
+      const vec = { x: p.left! - midLeft.x, y: p.top! - midLeft.y };
+      let t = (vec.x * ridgeDir.x + vec.y * ridgeDir.y) / ridgeLenSq;
+
+      // Clamp t trong khoảng [padding, 1-padding]
+      const paddingRatio = 10 / ridgeLen;
+      t = Math.max(paddingRatio, Math.min(1 - paddingRatio, t));
+
+      // Tính vị trí mới trên ridge line
+      const newX = midLeft.x + t * ridgeDir.x;
+      const newY = midLeft.y + t * ridgeDir.y;
+
+      p.set({ left: newX, top: newY });
+      p.setCoords(); // Cập nhật hit region
     };
 
     const updateLines = () => {
@@ -486,6 +531,8 @@ export function useFabricMap() {
       lineRidge.set({ x1: p1.left, y1: p1.top, x2: p2.left, y2: p2.top });
 
       canvas.value!.requestRenderAll();
+      p1.setCoords();
+      p2.setCoords();
     };
 
     // ================= INIT =================
@@ -527,6 +574,10 @@ export function useFabricMap() {
 
       p1.set({ left: p1New.x, top: p1New.y });
       p2.set({ left: p2New.x, top: p2New.y });
+
+      // Cập nhật hit region cho ridge points
+      p1.setCoords();
+      p2.setCoords();
 
       lastAngle = newAngle;
       updateLines();
@@ -586,5 +637,6 @@ export function useFabricMap() {
     clearFabric,
     clearTool,
     makeAndBeautifyShape,
+    getSubPolygons,
   };
 }

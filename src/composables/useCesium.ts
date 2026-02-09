@@ -392,6 +392,23 @@ export function useCesium() {
     };
   };
 
+  const getProjectionOfPoint = async (
+    viewer: Viewer,
+    point: Cartesian3,
+  ): Promise<Cartesian3> => {
+    const cartographic = Cartographic.fromCartesian(point);
+
+    const [updated] = await sampleTerrainMostDetailed(viewer.terrainProvider, [
+      cartographic,
+    ]);
+
+    return Cartesian3.fromRadians(
+      updated?.longitude!,
+      updated?.latitude!,
+      updated?.height!,
+    );
+  };
+
   const calculateLineLength = (
     cartesian1: Cartesian3,
     cartesian2: Cartesian3,

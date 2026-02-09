@@ -34,17 +34,18 @@ const {
   clearFabric,
   activeTool,
   makeAndBeautifyShape,
+  getSubPolygons,
 } = useFabricMap();
 const {
   initCesium,
   clearCesium,
   isLoading,
-  smartPickCartesian,
-  getGroundHeight,
-  cartesianToCartographic,
   lockCamera,
   unlockCamera,
   getRoofDataForThreeJS,
+  smartPickCartesian,
+  getGroundHeight,
+  cartesianToCartographic,
 } = useCesium();
 
 const toggleToolPopup = () => {
@@ -54,57 +55,17 @@ const toggleToolPopup = () => {
 const makeShape = async () => {
   lockCamera();
   makeAndBeautifyShape();
-
-  // Convert canvas points to Cesium Cartesian3 coordinates
-  const cartesianPoints = points.value
-    .map((p) => smartPickCartesian(p))
-    .filter((c): c is NonNullable<typeof c> => c !== null);
-
-  if (cartesianPoints.length < 4) {
-    console.warn("Need at least 4 points to create a hip roof");
-    return;
-  }
-
-  const roofCorners = cartesianPoints.slice(0, 4);
-
-  let ridgePoints =
-    cartesianPoints.length >= 6 ? cartesianPoints.slice(4, 6) : [];
-
-  console.log("Roof Corners (Cartesian3):", roofCorners);
-  console.log("Ridge Points (Cartesian3):", ridgePoints);
-
-  // Get roof data for Three.js
-  if (roofCorners.length === 4 && ridgePoints.length >= 2) {
-    const roofData = getRoofDataForThreeJS(roofCorners, ridgePoints);
-    console.log("Roof Data for Three.js:", roofData);
-
-    if (roofData) {
-      currentRoofData.value = roofData;
-      isShapeMade.value = true;
-
-      // Log face slopes
-      roofData.faces.forEach((face, i) => {
-        console.log(`Face ${i + 1} slope: ${face.slopeAngle.toFixed(2)}°`);
-      });
-    }
-  } else {
-    console.log("Calculating individual point data...");
-
-    // Fallback: Calculate height data for each point
-    for (const cartesian of cartesianPoints) {
-      const cartographic = cartesianToCartographic(cartesian);
-      const groundHeight = await getGroundHeight(
-        cartographic.longitude,
-        cartographic.latitude,
-      );
-      console.log({
-        longitude: cartographic.longitude,
-        latitude: cartographic.latitude,
-        roofHeight: cartographic.height,
-        groundHeight,
-        buildingHeight: cartographic.height - groundHeight,
-      });
-    }
+  console.log("points: ", points.value);
+  console.log("sub polygons: ", getSubPolygons());
+  for (const point of points.value) {
+    const cartesian = smartPickCartesian(point);
+    console.log("canvas to cartesian: ", cartesian);
+    const cartographic = cartesianToCartographic(cartesian!);
+    console.log("cartesian to cartographic: ", cartographic);
+    console.log(
+      "ground height: ",
+      await getGroundHeight(cartographic!.longitude, cartographic!.latitude),
+    );
   }
 };
 
@@ -147,6 +108,13 @@ const handleShowHouse3d = () => {
   if (currentRoofData.value) {
     emit("showHouse3d", currentRoofData.value);
   }
+};
+
+const clearShape = () => {
+  clearTool();
+  unlockCamera();
+  isShapeMade.value = false;
+  currentRoofData.value = null;
 };
 
 onMounted(async () => {
@@ -206,14 +174,7 @@ onUnmounted(() => {
         <!-- Clear button - hidden after shape made -->
         <AtomButton
           v-if="!isShapeMade"
-          @click="
-            () => {
-              clearTool();
-              unlockCamera();
-              isShapeMade = false;
-              currentRoofData = null;
-            }
-          "
+          @click="clearShape"
           variant="custom"
           v-tippy="{ content: 'Clear', placement: 'top' }"
           custom-class="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-600 backdrop-blur text-white border border-white/10 hover:bg-indigo-700"
@@ -262,14 +223,7 @@ onUnmounted(() => {
         <!-- Reset button - shown after shape made -->
         <AtomButton
           v-if="isShapeMade"
-          @click="
-            () => {
-              clearTool();
-              unlockCamera();
-              isShapeMade = false;
-              currentRoofData = null;
-            }
-          "
+          @click="clearShape"
           variant="custom"
           v-tippy="{ content: 'Reset', placement: 'top' }"
           custom-class="w-10 h-10 flex items-center justify-center rounded-full bg-red-600 backdrop-blur text-white border border-white/10 hover:bg-red-700"
