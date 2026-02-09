@@ -308,6 +308,15 @@ export function useFabricMap() {
     return { points, edges };
   };
 
+  /**
+   * Get only points from frame (4 corners + 2 ridges)
+   * Order: [tl, tr, bl, br, ridge1, ridge2]
+   */
+  const getPointsFromFrame = (): Point[] | null => {
+    const result = getPointsAndEdgesFromFrame();
+    return result ? result.points : null;
+  };
+
   const finishPolygon = () => {
     if (!canvas.value) return;
 
@@ -363,6 +372,42 @@ export function useFabricMap() {
         : getPointsAndEdgesFromFrame();
     if (!result) return [];
     return getSubPolygonsFromGraph(result.points, result.edges);
+  };
+
+  /**
+   * Find corner points (for walls) and ridge points from sub-polygons
+   * - Corner: appears in 1-2 sub-polygons (perimeter)
+   * - Ridge: appears in 3+ sub-polygons (internal)
+   */
+  const findCornersAndRidges = (
+    subPolygons: SubPolygon[],
+  ): { corners: Point[]; ridges: Point[] } => {
+    const pointKey = (p: Point) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
+    const countMap = new Map<string, { point: Point; count: number }>();
+
+    // Count occurrences of each point across all sub-polygons
+    for (const polygon of subPolygons) {
+      for (const point of polygon) {
+        const key = pointKey(point);
+        if (!countMap.has(key)) {
+          countMap.set(key, { point, count: 0 });
+        }
+        countMap.get(key)!.count++;
+      }
+    }
+
+    const corners: Point[] = [];
+    const ridges: Point[] = [];
+
+    for (const { point, count } of countMap.values()) {
+      if (count <= 2) {
+        corners.push(point);
+      } else {
+        ridges.push(point);
+      }
+    }
+
+    return { corners, ridges };
   };
 
   const handleSelectTool = (type: string) => {
@@ -638,5 +683,7 @@ export function useFabricMap() {
     clearTool,
     makeAndBeautifyShape,
     getSubPolygons,
+    findCornersAndRidges,
+    getPointsFromFrame,
   };
 }

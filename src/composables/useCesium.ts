@@ -296,100 +296,91 @@ export function useCesium() {
   };
 
   /**
-   * Prepare roof data for Three.js rendering
-   * @param roofCorners - Array of Cartesian3 points forming the roof base (where roof meets walls)
-   * @param ridgePoints - Array of Cartesian3 points for ridge (top)
-   * @param wallHeight - Height of walls in meters (from ground to roof corners)
-   * @returns Object with local coordinates and face data for Three.js
+   * Build house faces for Three.js
+   * Input: subPolygons (roof faces) + corners (for walls)
+   * Output: { roofFaces, wallFaces } - arrays of Point3D[] ready for Three.js
    */
-  const getRoofDataForThreeJS = (
-    roofCorners: Cartesian3[],
-    ridgePoints: Cartesian3[],
-    wallHeight = 3, // Default wall height in meters
+  const buildHouseFaces = async (
+    subPolygons: Array<Array<{ x: number; y: number }>>, // Each sub-polygon = 1 roof face
+    corners: Array<{ x: number; y: number }>, // Corner points for walls
   ) => {
-    if (roofCorners.length < 3) {
-      return null;
+    if (!viewer.value) return null;
+
+    // === 1. Convert all unique points to 3D ===
+    const pointKey = (p: { x: number; y: number }) =>
+      `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
+
+    // Collect all unique points
+    const allPoints = new Map<string, { x: number; y: number }>();
+    for (const polygon of subPolygons) {
+      for (const p of polygon) {
+        allPoints.set(pointKey(p), p);
+      }
+    }
+    for (const c of corners) {
+      allPoints.set(pointKey(c), c);
     }
 
-    // Use first corner as origin for local coordinate system
-    const origin = roofCorners[0]!;
+    // Pick 3D for each unique point
+    const point3DMap = new Map<string, { x: number; y: number; z: number }>();
+    const ground3DMap = new Map<string, { x: number; y: number; z: number }>();
+    let origin: Cartesian3 | null = null;
 
-    // Convert all points to local coordinates
-    const localCorners = roofCorners.map((p) => cartesianToLocal(p, origin));
-    const localRidge = ridgePoints.map((p) => cartesianToLocal(p, origin));
+    for (const [key, p] of allPoints) {
+      const cartesian = smartPickCartesian(p);
+      if (!cartesian) continue;
 
-    // Ground level is below the roof corners by wallHeight
-    // In local coords, roof corners are at y≈0, so ground is at y = -wallHeight
-    const groundHeight = -wallHeight;
+      if (!origin) origin = cartesian;
 
-    // Calculate face data (for hip roof: 4 faces)
-    const faces: Array<{
-      vertices: Array<{ x: number; y: number; z: number }>;
-      slopeAngle: number;
-    }> = [];
+      const local3D = cartesianToLocal(cartesian, origin);
+      point3DMap.set(key, local3D);
 
-    // For a standard hip roof with 4 corners and 2 ridge points
-    if (roofCorners.length === 4 && ridgePoints.length >= 2) {
-      // Front face (corner0, corner1, ridge0, ridge1)
-      faces.push({
-        vertices: [
-          localCorners[0]!,
-          localCorners[1]!,
-          localRidge[1]!,
-          localRidge[0]!,
-        ],
-        slopeAngle: calculateFaceSlope(
-          roofCorners[0]!,
-          roofCorners[1]!,
-          ridgePoints[0]!,
-        ),
-      });
-
-      // Right face (corner1, corner2, ridge1)
-      faces.push({
-        vertices: [localCorners[1]!, localCorners[2]!, localRidge[1]!],
-        slopeAngle: calculateFaceSlope(
-          roofCorners[1]!,
-          roofCorners[2]!,
-          ridgePoints[1]!,
-        ),
-      });
-
-      // Back face (corner2, corner3, ridge1, ridge0)
-      faces.push({
-        vertices: [
-          localCorners[2]!,
-          localCorners[3]!,
-          localRidge[0]!,
-          localRidge[1]!,
-        ],
-        slopeAngle: calculateFaceSlope(
-          roofCorners[2]!,
-          roofCorners[3]!,
-          ridgePoints[1]!,
-        ),
-      });
-
-      // Left face (corner3, corner0, ridge0)
-      faces.push({
-        vertices: [localCorners[3]!, localCorners[0]!, localRidge[0]!],
-        slopeAngle: calculateFaceSlope(
-          roofCorners[3]!,
-          roofCorners[0]!,
-          ridgePoints[0]!,
-        ),
-      });
+      // Project to ground for corner points only
+      if (corners.some((c) => pointKey(c) === key)) {
+        const ground = await getProjectionOfPoint(viewer.value, cartesian);
+        const groundLocal = cartesianToLocal(ground, origin);
+        ground3DMap.set(key, groundLocal);
+      }
     }
 
-    return {
-      origin: cartesianToCartographic(origin),
-      corners: localCorners,
-      ridge: localRidge,
-      faces,
-      allPoints: [...localCorners, ...localRidge],
-      groundHeight, // Ground level in local coords (negative value = below roof)
-      wallHeight, // Wall height in meters
-    };
+    if (!origin) return null;
+
+    // === 2. Build roof faces ===
+    type Point3D = { x: number; y: number; z: number };
+    const roofFaces: Point3D[][] = [];
+
+    for (const polygon of subPolygons) {
+      const face: Point3D[] = [];
+      for (const p of polygon) {
+        const p3d = point3DMap.get(pointKey(p));
+        if (p3d) face.push(p3d);
+      }
+      if (face.length >= 3) {
+        roofFaces.push(face);
+      }
+    }
+
+    // === 3. Build wall faces from corners ===
+    const wallFaces: Point3D[][] = [];
+    const n = corners.length;
+
+    for (let i = 0; i < n; i++) {
+      const nextI = (i + 1) % n;
+      const c0 = corners[i]!;
+      const c1 = corners[nextI]!;
+
+      const roof0 = point3DMap.get(pointKey(c0));
+      const roof1 = point3DMap.get(pointKey(c1));
+      const ground0 = ground3DMap.get(pointKey(c0));
+      const ground1 = ground3DMap.get(pointKey(c1));
+
+      if (roof0 && roof1 && ground0 && ground1) {
+        // Wall face: ground0 -> ground1 -> roof1 -> roof0
+        wallFaces.push([ground0, ground1, roof1, roof0]);
+      }
+    }
+
+    return { roofFaces, wallFaces };
   };
 
   const getProjectionOfPoint = async (
@@ -493,9 +484,10 @@ export function useCesium() {
     calculateNormal,
     calculateFaceSlope,
     cartesianToLocal,
-    getRoofDataForThreeJS,
+    buildHouseFaces,
     lockCamera,
     unlockCamera,
     calculateShapeArea,
+    getProjectionOfPoint,
   };
 }

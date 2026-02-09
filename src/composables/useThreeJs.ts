@@ -12,17 +12,10 @@ export interface Point3D {
   z: number;
 }
 
-export interface RoofFace {
-  vertices: Point3D[];
-  slopeAngle: number;
-}
-
+// Data from buildHouseFaces - face-based format
 export interface HouseData {
-  corners: Point3D[];
-  ridge: Point3D[];
-  faces: RoofFace[];
-  groundHeight?: number; // Ground level in local coords (usually negative)
-  wallHeight?: number; // Wall height in meters
+  roofFaces: Point3D[][]; // Each roof face is an array of points
+  wallFaces: Point3D[][]; // Each wall face is an array of points (4 points each)
 }
 
 export interface ThreeJsColors {
@@ -30,15 +23,13 @@ export interface ThreeJsColors {
   wall: number;
   roofEdge: number;
   wallEdge: number;
-  label: string;
 }
 
 const DEFAULT_COLORS: ThreeJsColors = {
-  roof: 0xcc4444, // Red-brown roof
-  wall: 0xf5f5dc, // Beige walls
-  roofEdge: 0x8b0000, // Dark red edges
-  wallEdge: 0x8b7355, // Brown edges
-  label: "#ffffff", // White labels
+  roof: 0xcc4444,
+  wall: 0xf5f5dc,
+  roofEdge: 0x8b0000,
+  wallEdge: 0x8b7355,
 };
 
 export function useThreeJs() {
@@ -265,231 +256,96 @@ export function useThreeJs() {
   };
 
   /**
-   * Create roof mesh from face data
+   * Create house from face arrays
+   * - roofFaces: each face is Point3D[] (polygon)
+   * - wallFaces: each face is Point3D[] (quad: 4 points)
    */
-  const createRoof = (
-    faces: RoofFace[],
-    color = DEFAULT_COLORS.roof,
-    edgeColor = DEFAULT_COLORS.roofEdge,
-    showLabels = true,
-  ) => {
+  const createHouse = (data: HouseData) => {
     if (!scene.value) return;
 
-    const roofGroup = new THREE.Group();
-    roofGroup.name = "roof";
+    const { roofFaces, wallFaces } = data;
 
-    faces.forEach((face) => {
-      if (face.vertices.length < 3) return;
-
-      // For 3D faces, we need to create a custom geometry
-      const geometry = new THREE.BufferGeometry();
-      const vertices: number[] = [];
-      const indices: number[] = [];
-
-      // Add vertices
-      face.vertices.forEach((v) => {
-        vertices.push(v.x, v.y, v.z);
-      });
-
-      // Create triangles (fan triangulation for convex polygons)
-      for (let i = 1; i < face.vertices.length - 1; i++) {
-        indices.push(0, i, i + 1);
-      }
-
-      geometry.setAttribute(
-        "position",
-        new THREE.Float32BufferAttribute(vertices, 3),
-      );
-      geometry.setIndex(indices);
-      geometry.computeVertexNormals();
-
-      // Create mesh
-      const material = new THREE.MeshStandardMaterial({
-        color,
-        side: THREE.DoubleSide,
-        roughness: 0.7,
-        metalness: 0.1,
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      roofGroup.add(mesh);
-
-      // Add edges
-      const edges = new THREE.EdgesGeometry(geometry);
-      const edgeMaterial = new THREE.LineBasicMaterial({ color: edgeColor });
-      const wireframe = new THREE.LineSegments(edges, edgeMaterial);
-      roofGroup.add(wireframe);
-
-      // Add edge labels with lengths
-      if (showLabels) {
-        for (let i = 0; i < face.vertices.length; i++) {
-          const start = face.vertices[i]!;
-          const end = face.vertices[(i + 1) % face.vertices.length]!;
-          const { label } = createEdgeWithLabel(
-            start,
-            end,
-            edgeColor,
-            DEFAULT_COLORS.label,
-          );
-          roofGroup.add(label);
-        }
-      }
-
-      // Add slope angle label
-      const centroid = {
-        x:
-          face.vertices.reduce((sum, v) => sum + v.x, 0) / face.vertices.length,
-        y:
-          face.vertices.reduce((sum, v) => sum + v.y, 0) / face.vertices.length,
-        z:
-          face.vertices.reduce((sum, v) => sum + v.z, 0) / face.vertices.length,
-      };
-      const slopeLabel = createTextLabel(
-        `${face.slopeAngle.toFixed(1)}°`,
-        "#ffcc00",
-        { fontSize: "14px", fontWeight: "bold" },
-      );
-      slopeLabel.position.set(centroid.x, centroid.y + 0.5, centroid.z);
-      roofGroup.add(slopeLabel);
-    });
-
-    scene.value.add(roofGroup);
-    return roofGroup;
-  };
-
-  /**
-   * Create walls from corner points
-   */
-  const createWalls = (
-    corners: Point3D[],
-    groundHeight = 0,
-    color = DEFAULT_COLORS.wall,
-    edgeColor = DEFAULT_COLORS.wallEdge,
-    showLabels = true,
-  ) => {
-    if (!scene.value || corners.length < 3) return;
-
+    // === WALLS ===
     const wallGroup = new THREE.Group();
     wallGroup.name = "walls";
 
-    // Create wall for each pair of consecutive corners
-    for (let i = 0; i < corners.length; i++) {
-      const corner1 = corners[i]!;
-      const corner2 = corners[(i + 1) % corners.length]!;
+    for (const face of wallFaces) {
+      if (face.length < 3) continue;
 
-      // Wall vertices: bottom-left, bottom-right, top-right, top-left
-      const wallVertices = [
-        new THREE.Vector3(corner1.x, groundHeight, corner1.z),
-        new THREE.Vector3(corner2.x, groundHeight, corner2.z),
-        new THREE.Vector3(corner2.x, corner2.y, corner2.z),
-        new THREE.Vector3(corner1.x, corner1.y, corner1.z),
-      ];
+      const geo = new THREE.BufferGeometry();
+      const verts: number[] = [];
+      face.forEach((p) => verts.push(p.x, p.y, p.z));
 
-      // Create geometry
-      const geometry = new THREE.BufferGeometry();
-      const positions = new Float32Array([
-        // First triangle
-        wallVertices[0]!.x,
-        wallVertices[0]!.y,
-        wallVertices[0]!.z,
-        wallVertices[1]!.x,
-        wallVertices[1]!.y,
-        wallVertices[1]!.z,
-        wallVertices[2]!.x,
-        wallVertices[2]!.y,
-        wallVertices[2]!.z,
-        // Second triangle
-        wallVertices[0]!.x,
-        wallVertices[0]!.y,
-        wallVertices[0]!.z,
-        wallVertices[2]!.x,
-        wallVertices[2]!.y,
-        wallVertices[2]!.z,
-        wallVertices[3]!.x,
-        wallVertices[3]!.y,
-        wallVertices[3]!.z,
-      ]);
-      geometry.setAttribute(
-        "position",
-        new THREE.Float32BufferAttribute(positions, 3),
+      // Triangulate (fan from first vertex)
+      const indices: number[] = [];
+      for (let i = 1; i < face.length - 1; i++) {
+        indices.push(0, i, i + 1);
+      }
+
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+
+      const mesh = new THREE.Mesh(
+        geo,
+        new THREE.MeshStandardMaterial({
+          color: DEFAULT_COLORS.wall,
+          side: THREE.DoubleSide,
+        }),
       );
-      geometry.computeVertexNormals();
-
-      // Create mesh
-      const material = new THREE.MeshStandardMaterial({
-        color,
-        side: THREE.DoubleSide,
-        roughness: 0.8,
-        metalness: 0,
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
       wallGroup.add(mesh);
 
       // Add edges
-      const edges = new THREE.EdgesGeometry(geometry);
-      const edgeMaterial = new THREE.LineBasicMaterial({ color: edgeColor });
-      const wireframe = new THREE.LineSegments(edges, edgeMaterial);
-      wallGroup.add(wireframe);
-
-      // Add height label (vertical edge)
-      if (showLabels) {
-        const wallHeight = corner1.y - groundHeight;
-        const heightLabel = createTextLabel(
-          `${wallHeight.toFixed(2)}m`,
-          DEFAULT_COLORS.label,
-        );
-        heightLabel.position.set(
-          corner1.x,
-          groundHeight + wallHeight / 2,
-          corner1.z,
-        );
-        wallGroup.add(heightLabel);
-
-        // Add width label (horizontal edge at bottom)
-        const width = Math.sqrt(
-          Math.pow(corner2.x - corner1.x, 2) +
-            Math.pow(corner2.z - corner1.z, 2),
-        );
-        const widthLabel = createTextLabel(
-          `${width.toFixed(2)}m`,
-          DEFAULT_COLORS.label,
-        );
-        widthLabel.position.set(
-          (corner1.x + corner2.x) / 2,
-          groundHeight + 0.2,
-          (corner1.z + corner2.z) / 2,
-        );
-        wallGroup.add(widthLabel);
-      }
+      const edges = new THREE.EdgesGeometry(geo);
+      wallGroup.add(
+        new THREE.LineSegments(
+          edges,
+          new THREE.LineBasicMaterial({ color: DEFAULT_COLORS.wallEdge }),
+        ),
+      );
     }
-
     scene.value.add(wallGroup);
-    return wallGroup;
-  };
 
-  /**
-   * Create complete house from house data
-   */
-  const createHouse = (
-    houseData: HouseData,
-    colors: Partial<ThreeJsColors> = {},
-  ) => {
-    const mergedColors = { ...DEFAULT_COLORS, ...colors };
-    const groundHeight = houseData.groundHeight ?? 0;
+    // === ROOF ===
+    const roofGroup = new THREE.Group();
+    roofGroup.name = "roof";
 
-    // Create walls
-    createWalls(
-      houseData.corners,
-      groundHeight,
-      mergedColors.wall,
-      mergedColors.wallEdge,
-    );
+    for (const face of roofFaces) {
+      if (face.length < 3) continue;
 
-    // Create roof
-    createRoof(houseData.faces, mergedColors.roof, mergedColors.roofEdge);
+      const geo = new THREE.BufferGeometry();
+      const verts: number[] = [];
+      face.forEach((p) => verts.push(p.x, p.y, p.z));
+
+      // Triangulate (fan from first vertex)
+      const indices: number[] = [];
+      for (let i = 1; i < face.length - 1; i++) {
+        indices.push(0, i, i + 1);
+      }
+
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+
+      const mesh = new THREE.Mesh(
+        geo,
+        new THREE.MeshStandardMaterial({
+          color: DEFAULT_COLORS.roof,
+          side: THREE.DoubleSide,
+        }),
+      );
+      roofGroup.add(mesh);
+
+      // Add edges
+      const edges = new THREE.EdgesGeometry(geo);
+      roofGroup.add(
+        new THREE.LineSegments(
+          edges,
+          new THREE.LineBasicMaterial({ color: DEFAULT_COLORS.roofEdge }),
+        ),
+      );
+    }
+    scene.value.add(roofGroup);
   };
 
   /**
@@ -583,15 +439,13 @@ export function useThreeJs() {
   };
 
   return {
-    // State
     scene,
     camera,
     renderer,
     isInitialized,
     initThreeJs,
     dispose,
-    createRoof,
-    createWalls,
+    createEdgeWithLabel,
     createHouse,
     clearHouse,
     updateColors,

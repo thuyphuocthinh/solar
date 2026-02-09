@@ -6,6 +6,7 @@ import "cesium/Build/Cesium/Widgets/widgets.css";
 import { onMounted, onUnmounted, ref } from "vue";
 import { useFabricMap } from "@/composables/useFabricMap";
 import { useCesium } from "@/composables/useCesium";
+import { getSubPolygons } from "@/utils/graph";
 
 const props = defineProps<{
   initialAddress?: string;
@@ -22,19 +23,20 @@ const containerRef = ref<HTMLElement | null>(null);
 const fabricCanvasRef = ref<HTMLCanvasElement | null>(null);
 const isToolPopupOpen = ref(false);
 const isShapeMade = ref(false);
-const currentRoofData = ref<ReturnType<typeof getRoofDataForThreeJS> | null>(
+const currentRoofData = ref<Awaited<ReturnType<typeof buildHouseFaces>> | null>(
   null,
 );
 
 const {
   points,
+  edges,
   clearTool,
   initFabric,
   handleSelectTool,
   clearFabric,
   activeTool,
   makeAndBeautifyShape,
-  getSubPolygons,
+  findCornersAndRidges,
 } = useFabricMap();
 const {
   initCesium,
@@ -42,10 +44,7 @@ const {
   isLoading,
   lockCamera,
   unlockCamera,
-  getRoofDataForThreeJS,
-  smartPickCartesian,
-  getGroundHeight,
-  cartesianToCartographic,
+  buildHouseFaces,
 } = useCesium();
 
 const toggleToolPopup = () => {
@@ -55,17 +54,14 @@ const toggleToolPopup = () => {
 const makeShape = async () => {
   lockCamera();
   makeAndBeautifyShape();
-  console.log("points: ", points.value);
-  console.log("sub polygons: ", getSubPolygons());
-  for (const point of points.value) {
-    // const cartesian = smartPickCartesian(point);
-    // console.log("canvas to cartesian: ", cartesian);
-    // const cartographic = cartesianToCartographic(cartesian!);
-    // console.log("cartesian to cartographic: ", cartographic);
-    // console.log(
-    //   "ground height: ",
-    //   await getGroundHeight(cartographic!.longitude, cartographic!.latitude),
-    // );
+  // createDataForThreeJs => return faces not points (roof faces, wall faces)
+  const subPolygons = getSubPolygons(points.value, edges.value);
+  const { corners } = findCornersAndRidges(subPolygons);
+  const houseFaces = await buildHouseFaces(subPolygons, corners);
+  console.log("houseFaces", houseFaces);
+  if (houseFaces) {
+    currentRoofData.value = houseFaces;
+    isShapeMade.value = true;
   }
 };
 

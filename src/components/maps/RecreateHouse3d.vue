@@ -31,20 +31,15 @@ const renderHouse = () => {
   if (!isInitialized.value || !props.houseData) return;
 
   clearHouse();
-  createHouse(props.houseData, props.colors);
+  createHouse(props.houseData);
 
-  // Focus on the center of the house
-  if (props.houseData.corners.length > 0) {
+  // Focus on the center of the house (from all roof face points)
+  const allRoofPoints = props.houseData.roofFaces.flat();
+  if (allRoofPoints.length > 0) {
     const center = {
-      x:
-        props.houseData.corners.reduce((sum, c) => sum + c.x, 0) /
-        props.houseData.corners.length,
-      y:
-        props.houseData.corners.reduce((sum, c) => sum + c.y, 0) /
-        props.houseData.corners.length,
-      z:
-        props.houseData.corners.reduce((sum, c) => sum + c.z, 0) /
-        props.houseData.corners.length,
+      x: allRoofPoints.reduce((sum, c) => sum + c.x, 0) / allRoofPoints.length,
+      y: allRoofPoints.reduce((sum, c) => sum + c.y, 0) / allRoofPoints.length,
+      z: allRoofPoints.reduce((sum, c) => sum + c.z, 0) / allRoofPoints.length,
     };
     focusOn(center, 25);
   }
