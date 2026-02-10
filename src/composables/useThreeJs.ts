@@ -311,11 +311,23 @@ export function useThreeJs() {
     houseGroup.add(walls);
     houseGroup.add(roof);
 
-    // === FIX Y POSITION ===
-    const box = new THREE.Box3().setFromObject(houseGroup);
-    houseGroup.position.y -= box.min.y + 3.3;
+    // Compute minY directly from data (more reliable than Box3 before scene add)
+    const allPoints = [...data.wallFaces.flat(), ...data.roofFaces.flat()];
+    const minY = Math.min(...allPoints.map((p) => p.y));
+    houseGroup.position.y = -minY;
 
     scene.value.add(houseGroup);
+
+    // Auto-focus camera
+    if (camera.value && controls.value) {
+      const box = new THREE.Box3().setFromObject(houseGroup);
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const dist = maxDim * 1.8;
+      camera.value.position.set(dist, dist * 0.7, dist);
+      controls.value.target.set(0, size.y / 2, 0);
+      controls.value.update();
+    }
   };
 
   /**
