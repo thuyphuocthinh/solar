@@ -5,6 +5,7 @@
       :id="id"
       :width="props.width"
       :height="props.height"
+      :color="props.color"
       @click="handleClick"
     />
     <template #fallback>
@@ -35,6 +36,7 @@ const props = withDefaults(
     width?: string | number;
     height?: string | number;
     stroke?: string;
+    color?: string;
   }>(),
   {
     width: 24,

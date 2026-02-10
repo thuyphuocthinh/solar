@@ -23,6 +23,7 @@ const containerRef = ref<HTMLElement | null>(null);
 const fabricCanvasRef = ref<HTMLCanvasElement | null>(null);
 const isToolPopupOpen = ref(false);
 const isShapeMade = ref(false);
+const isMakingShape = ref(false);
 const currentRoofData = ref<Awaited<ReturnType<typeof buildHouseFaces>> | null>(
   null,
 );
@@ -30,18 +31,18 @@ const currentRoofData = ref<Awaited<ReturnType<typeof buildHouseFaces>> | null>(
 const {
   points,
   edges,
+  activeTool,
   clearTool,
   initFabric,
   handleSelectTool,
   clearFabric,
-  activeTool,
   makeAndBeautifyShape,
   findCornersAndRidges,
 } = useFabricMap();
 const {
+  isLoading,
   initCesium,
   clearCesium,
-  isLoading,
   lockCamera,
   unlockCamera,
   buildHouseFaces,
@@ -52,16 +53,24 @@ const toggleToolPopup = () => {
 };
 
 const makeShape = async () => {
-  lockCamera();
-  makeAndBeautifyShape();
-  // createDataForThreeJs => return faces not points (roof faces, wall faces)
-  const subPolygons = getSubPolygons(points.value, edges.value);
-  const { corners } = findCornersAndRidges(subPolygons);
-  const houseFaces = await buildHouseFaces(subPolygons, corners);
-  console.log("houseFaces", houseFaces);
-  if (houseFaces) {
-    currentRoofData.value = houseFaces;
-    isShapeMade.value = true;
+  try {
+    isMakingShape.value = true;
+    lockCamera();
+    makeAndBeautifyShape();
+    const subPolygons = getSubPolygons(points.value, edges.value);
+    const { corners } = findCornersAndRidges(subPolygons);
+    const houseFaces = await buildHouseFaces(subPolygons, corners);
+    console.log("houseFaces", houseFaces);
+    if (houseFaces) {
+      currentRoofData.value = houseFaces;
+      isShapeMade.value = true;
+    }
+  } catch (error) {
+    console.error("Error making shape:", error);
+  } finally {
+    setTimeout(() => {
+      isMakingShape.value = false;
+    }, 2000);
   }
 };
 
@@ -174,6 +183,7 @@ onUnmounted(() => {
           variant="custom"
           v-tippy="{ content: 'Clear', placement: 'top' }"
           custom-class="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-600 backdrop-blur text-white border border-white/10 hover:bg-indigo-700"
+          :disabled="isMakingShape"
         >
           <AtomIcon
             name="IconClear"
@@ -190,6 +200,8 @@ onUnmounted(() => {
           variant="custom"
           v-tippy="{ content: 'Make Shape', placement: 'top' }"
           custom-class="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-600 backdrop-blur text-white border border-white/10 hover:bg-indigo-700"
+          :loading="isMakingShape"
+          :disabled="isMakingShape"
         >
           <AtomIcon
             name="IconShape"
