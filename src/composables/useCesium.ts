@@ -180,85 +180,6 @@ export function useCesium() {
   };
 
   /**
-   * Calculate roof slope ratio (rise / run)
-   * @returns Slope ratio (e.g., 0.5 means 1:2 slope)
-   */
-  const calculateSlope = (cartesian1: Cartesian3, cartesian2: Cartesian3) => {
-    const cartographic1 = cartesianToCartographic(cartesian1);
-    const cartographic2 = cartesianToCartographic(cartesian2);
-
-    const deltaHeight = Math.abs(cartographic2.height - cartographic1.height);
-    const distance3D = calculateLineLength(cartesian1, cartesian2);
-
-    // Calculate horizontal distance from 3D distance and height difference
-    const horizontalDistance = Math.sqrt(
-      distance3D * distance3D - deltaHeight * deltaHeight,
-    );
-
-    // Slope = rise / run
-    return horizontalDistance > 0 ? deltaHeight / horizontalDistance : 0;
-  };
-
-  /**
-   * Calculate roof slope angle in degrees
-   * @returns Angle in degrees (e.g., 30° means 30 degree incline)
-   */
-  const calculateSlopeAngle = (
-    cartesian1: Cartesian3,
-    cartesian2: Cartesian3,
-  ) => {
-    const slope = calculateSlope(cartesian1, cartesian2);
-    return CesiumMath.toDegrees(Math.atan(slope));
-  };
-
-  /**
-   * Calculate normal vector from 3 points on a plane
-   * @param p1, p2, p3 - Three points on the roof face
-   * @returns Normalized normal vector
-   */
-  const calculateNormal = (p1: Cartesian3, p2: Cartesian3, p3: Cartesian3) => {
-    // Vectors from p1 to p2 and p1 to p3
-    const v1 = Cartesian3.subtract(p2, p1, new Cartesian3());
-    const v2 = Cartesian3.subtract(p3, p1, new Cartesian3());
-
-    // Cross product to get normal
-    const normal = Cartesian3.cross(v1, v2, new Cartesian3());
-    Cartesian3.normalize(normal, normal);
-
-    return normal;
-  };
-
-  /**
-   * Calculate roof face slope angle using normal vector method
-   * This is more accurate for multi-face roofs (hip roof, etc.)
-   * @param p1, p2, p3 - Three points on the roof face
-   * @returns Slope angle in degrees (0° = horizontal, 90° = vertical)
-   */
-  const calculateFaceSlope = (
-    p1: Cartesian3,
-    p2: Cartesian3,
-    p3: Cartesian3,
-  ) => {
-    const normal = calculateNormal(p1, p2, p3);
-
-    // Get local up vector at the centroid of the face
-    const centroid = new Cartesian3();
-    Cartesian3.add(p1, p2, centroid);
-    Cartesian3.add(centroid, p3, centroid);
-    Cartesian3.divideByScalar(centroid, 3, centroid);
-
-    // Local up vector (normal to earth's surface at this point)
-    const localUp = Cartesian3.normalize(centroid, new Cartesian3());
-
-    // Angle between roof normal and local up
-    const dot = Math.abs(Cartesian3.dot(normal, localUp));
-    const angleFromVertical = Math.acos(Math.min(dot, 1)); // clamp for safety
-
-    // Slope angle = angle from horizontal = 90° - angle from vertical
-    return 90 - CesiumMath.toDegrees(angleFromVertical);
-  };
-
-  /**
    * Convert Cesium Cartesian3 to Three.js-compatible local coordinates
    * Uses first point as origin
    * Three.js convention: X=East, Y=Up (height), Z=North (forward)
@@ -456,6 +377,82 @@ export function useCesium() {
     c.enableLook = true;
   };
 
+  /**
+   * Calculate the normal vector of a 3D polygon
+   * Uses the first three points to define the plane (assumes planar polygon)
+   * Returns normalized vector {x, y, z}
+   */
+  const calculatePolygonNormal = (points: Point3D[]): Point3D => {
+    if (points.length < 3) return { x: 0, y: 1, z: 0 };
+
+    const p0 = points[0]!;
+    const p1 = points[1]!;
+    const p2 = points[2]!;
+
+    // Vector v1 = p1 - p0
+    const v1 = {
+      x: p1.x - p0.x,
+      y: p1.y - p0.y,
+      z: p1.z - p0.z,
+    };
+
+    // Vector v2 = p2 - p0
+    const v2 = {
+      x: p2.x - p0.x,
+      y: p2.y - p0.y,
+      z: p2.z - p0.z,
+    };
+
+    // Cross product v1 x v2
+    const normal = {
+      x: v1.y * v2.z - v1.z * v2.y,
+      y: v1.z * v2.x - v1.x * v2.z,
+      z: v1.x * v2.y - v1.y * v2.x,
+    };
+
+    // Normalize
+    const length = Math.sqrt(
+      normal.x * normal.x + normal.y * normal.y + normal.z * normal.z,
+    );
+
+    if (length === 0) return { x: 0, y: 1, z: 0 };
+
+    return {
+      x: normal.x / length,
+      y: normal.y / length,
+      z: normal.z / length,
+    };
+  };
+
+  /**
+   * Calculate slope (inclination) of a polygon relative to the horizontal plane (Oxz)
+   * @param normal Normalized normal vector of the polygon
+   * @returns Angle in degrees (0 = flat, 90 = vertical)
+   */
+  const calculatePolygonSlope = (normal: Point3D): number => {
+    // Dot product with Up vector (0, 1, 0)
+    // dot = nx*0 + ny*1 + nz*0 = ny
+    // Since vectors are normalized, dot = cos(theta)
+    const dot = normal.y;
+
+    // Clamp value to [-1, 1] to avoid numerical errors
+    const clampedDot = Math.max(-1, Math.min(1, dot));
+
+    // Angle from vertical (Up)
+    const radians = Math.acos(clampedDot);
+
+    // Convert to degrees
+    const degrees = (radians * 180) / Math.PI;
+
+    // We want slope relative to horizontal, which matches 'degrees' if normal is contiguous with Up
+    // If normal is (0,1,0), slope should be 0. acos(1) = 0. Correct.
+    // If normal is (1,0,0), slope should be 90. acos(0) = 90. Correct.
+
+    return degrees;
+  };
+
+  // sub polygon => slope of each face => re-calculate corner points
+
   return {
     viewer,
     isLoading,
@@ -466,15 +463,13 @@ export function useCesium() {
     getGroundHeight,
     cartesianToCartographic,
     calculateLineLength,
-    calculateSlope,
-    calculateSlopeAngle,
-    calculateNormal,
-    calculateFaceSlope,
     cartesianToLocal,
     buildHouseFaces,
     lockCamera,
     unlockCamera,
     calculateShapeArea,
     getProjectionOfPoint,
+    calculatePolygonNormal,
+    calculatePolygonSlope,
   };
 }

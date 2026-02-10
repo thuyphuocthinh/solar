@@ -46,6 +46,8 @@ const {
   lockCamera,
   unlockCamera,
   buildHouseFaces,
+  calculatePolygonNormal,
+  calculatePolygonSlope,
 } = useCesium();
 
 const toggleToolPopup = () => {
@@ -62,6 +64,18 @@ const makeShape = async () => {
     const { corners } = findCornersAndRidges(subPolygons);
     const houseFaces = await buildHouseFaces(subPolygons, corners);
     console.log("houseFaces", houseFaces);
+
+    if (houseFaces?.roofFaces) {
+      houseFaces.roofFaces.forEach((face, index) => {
+        const normal = calculatePolygonNormal(face);
+        const slope = calculatePolygonSlope(normal);
+        console.log(`Face ${index}:`, {
+          points: face,
+          normal,
+          slope: slope.toFixed(2) + "°",
+        });
+      });
+    }
     if (houseFaces) {
       currentRoofData.value = houseFaces;
       isShapeMade.value = true;
