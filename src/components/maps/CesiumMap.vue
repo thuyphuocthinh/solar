@@ -58,6 +58,7 @@ const makeShape = async () => {
     lockCamera();
     makeAndBeautifyShape();
     const subPolygons = getSubPolygons(points.value, edges.value);
+    console.log("subPolygons", subPolygons);
     const { corners } = findCornersAndRidges(subPolygons);
     const houseFaces = await buildHouseFaces(subPolygons, corners);
     console.log("houseFaces", houseFaces);

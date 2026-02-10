@@ -9,7 +9,7 @@ import AtomIcon from "@/components/atoms/AtomIcon.vue";
 import AtomNotFound from "@/components/atoms/AtomNotFound.vue";
 import heroBg from "@/assets/hero-bg.png";
 import RecreateHouse3d from "@/components/maps/RecreateHouse3d.vue";
-import type { HouseData } from "@/composables/useThreeJs";
+import type { HouseData } from "@/types";
 
 const isMapActive = ref(false);
 const showAddressModal = ref(false);
@@ -74,7 +74,6 @@ const onInput = debounce(() => {
 }, 500);
 
 const selectSuggestion = (suggestion: any) => {
-  console.log("suggestion: ", suggestion);
   addressInput.value = suggestion.display_name;
   suggestions.value = [];
 
@@ -323,7 +322,6 @@ onUnmounted(() => {
           :initial-coordinates="searchCoordinates"
           @show-house3d="
             (data: HouseData) => {
-              console.log('data: ', data);
               house3dData = data;
             }
           "

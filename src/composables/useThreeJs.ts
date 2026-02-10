@@ -237,7 +237,7 @@ export function useThreeJs() {
     return { line, label };
   };
 
-  const addFaceGroup = (
+  const createFaceGroup = (
     faces: Point3D[][],
     groupName: string,
     fillColor: number,
@@ -280,7 +280,7 @@ export function useThreeJs() {
       );
     }
 
-    scene.value!.add(group);
+    return group;
   };
 
   /**
@@ -291,19 +291,31 @@ export function useThreeJs() {
   const createHouse = (data: HouseData) => {
     if (!scene.value) return;
 
-    addFaceGroup(
+    const houseGroup = new THREE.Group();
+    houseGroup.name = "house";
+
+    const walls = createFaceGroup(
       data.wallFaces,
       "walls",
       DEFAULT_COLORS.wall,
       DEFAULT_COLORS.wallEdge,
     );
 
-    addFaceGroup(
+    const roof = createFaceGroup(
       data.roofFaces,
       "roof",
       DEFAULT_COLORS.roof,
       DEFAULT_COLORS.roofEdge,
     );
+
+    houseGroup.add(walls);
+    houseGroup.add(roof);
+
+    // === FIX Y POSITION ===
+    const box = new THREE.Box3().setFromObject(houseGroup);
+    houseGroup.position.y -= box.min.y + 3.3;
+
+    scene.value.add(houseGroup);
   };
 
   /**

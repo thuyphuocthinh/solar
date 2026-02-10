@@ -7,6 +7,8 @@ import {
   Math as CesiumMath,
   Cartesian2,
   Cartographic,
+  Matrix4,
+  Transforms,
   sampleTerrainMostDetailed,
   Cesium3DTileset,
 } from "cesium";
@@ -264,34 +266,21 @@ export function useCesium() {
   const cartesianToLocal = (
     cartesian: Cartesian3,
     origin: Cartesian3,
-  ): { x: number; y: number; z: number } => {
-    // Get offset from origin
-    const offset = Cartesian3.subtract(cartesian, origin, new Cartesian3());
+    groundOffset = 0,
+  ) => {
+    const enuToFixed = Transforms.eastNorthUpToFixedFrame(origin);
+    const fixedToEnu = Matrix4.inverseTransformation(enuToFixed, new Matrix4());
 
-    // Get local ENU (East-North-Up) frame at origin
-    const originCartographic = Cartographic.fromCartesian(origin);
-
-    // Calculate local east and north vectors
-    const east = new Cartesian3(
-      -Math.sin(originCartographic.longitude),
-      Math.cos(originCartographic.longitude),
-      0,
+    const enu = Matrix4.multiplyByPoint(
+      fixedToEnu,
+      cartesian,
+      new Cartesian3(),
     );
-    const north = new Cartesian3(
-      -Math.sin(originCartographic.latitude) *
-        Math.cos(originCartographic.longitude),
-      -Math.sin(originCartographic.latitude) *
-        Math.sin(originCartographic.longitude),
-      Math.cos(originCartographic.latitude),
-    );
-    const up = Cartesian3.normalize(origin, new Cartesian3());
 
-    // Three.js uses Y-up convention, so we swap:
-    // Cesium ENU -> Three.js: X=East, Y=Up, Z=North
     return {
-      x: Cartesian3.dot(offset, east),
-      y: Cartesian3.dot(offset, up), // Height goes to Y in Three.js
-      z: Cartesian3.dot(offset, north), // North goes to Z in Three.js
+      x: enu.x, // East
+      y: enu.z - groundOffset, // Up (normalized to ground)
+      z: enu.y, // North
     };
   };
 
@@ -306,7 +295,7 @@ export function useCesium() {
   ) => {
     if (!viewer.value) return null;
 
-    // === 1. Convert all unique points to 3D ===
+    // 1. Convert all unique points to 3D
     const pointKey = (p: { x: number; y: number }) =>
       `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
 
@@ -345,7 +334,7 @@ export function useCesium() {
 
     if (!origin) return null;
 
-    // === 2. Build roof faces ===
+    // 2. Build roof faces
     const roofFaces: Point3D[][] = [];
 
     for (const polygon of subPolygons) {
@@ -359,7 +348,7 @@ export function useCesium() {
       }
     }
 
-    // === 3. Build wall faces from corners ===
+    // 3. Build wall faces from corners
     const wallFaces: Point3D[][] = [];
     const n = corners.length;
 
@@ -374,7 +363,6 @@ export function useCesium() {
       const ground1 = ground3DMap.get(pointKey(c1));
 
       if (roof0 && roof1 && ground0 && ground1) {
-        // Wall face: ground0 -> ground1 -> roof1 -> roof0
         wallFaces.push([ground0, ground1, roof1, roof0]);
       }
     }
