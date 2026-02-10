@@ -205,35 +205,55 @@ export function useCesium() {
     };
   };
 
-  /**
-   * Build house faces for Three.js
-   * Input: subPolygons (roof faces) + corners (for walls)
-   * Output: { roofFaces, wallFaces } - arrays of Point3D[] ready for Three.js
-   */
+  const pointKey2D = (p: { x: number; y: number }) =>
+    `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
+
+  const pointKey3D = (p: { x: number; z: number }) =>
+    `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
+
+  const findRidgePoint = (face: Point3D[]) =>
+    face.reduce((max, p) => (p.y > max.y ? p : max), face[0]!);
+
+  const recomputeFaceBySlope = (
+    face: Point3D[],
+    slopeDeg: number,
+    ridge: Point3D,
+  ): Point3D[] => {
+    const slopeRad = CesiumMath.toRadians(slopeDeg);
+
+    return face.map((p) => {
+      if (p === ridge) return p;
+
+      const dx = p.x - ridge.x;
+      const dz = p.z - ridge.z;
+      const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+      const heightDrop = Math.tan(slopeRad) * horizontalDist;
+
+      return { ...p, y: ridge.y - heightDrop };
+    });
+  };
+
   const buildHouseFaces = async (
-    subPolygons: Array<Array<{ x: number; y: number }>>, // Each sub-polygon = 1 roof face
-    corners: Array<{ x: number; y: number }>, // Corner points for walls
+    subPolygons: Array<Array<{ x: number; y: number }>>,
+    corners: Array<{ x: number; y: number }>,
   ) => {
     if (!viewer.value) return null;
 
-    // 1. Convert all unique points to 3D
-    const pointKey = (p: { x: number; y: number }) =>
-      `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
-
-    // Collect all unique points
+    /* ===============================
+     * 1. Collect unique 2D points
+     * =============================== */
     const allPoints = new Map<string, { x: number; y: number }>();
-    for (const polygon of subPolygons) {
-      for (const p of polygon) {
-        allPoints.set(pointKey(p), p);
-      }
-    }
-    for (const c of corners) {
-      allPoints.set(pointKey(c), c);
-    }
 
-    // Pick 3D for each unique point
-    const point3DMap = new Map<string, { x: number; y: number; z: number }>();
-    const ground3DMap = new Map<string, { x: number; y: number; z: number }>();
+    subPolygons.forEach((poly) =>
+      poly.forEach((p) => allPoints.set(pointKey2D(p), p)),
+    );
+    corners.forEach((c) => allPoints.set(pointKey2D(c), c));
+
+    /* ===============================
+     * 2. Convert to local 3D
+     * =============================== */
+    const point3DMap = new Map<string, Point3D>();
+    const ground3DMap = new Map<string, Point3D>();
     let origin: Cartesian3 | null = null;
 
     for (const [key, p] of allPoints) {
@@ -242,49 +262,95 @@ export function useCesium() {
 
       if (!origin) origin = cartesian;
 
-      const local3D = cartesianToLocal(cartesian, origin);
-      point3DMap.set(key, local3D);
+      point3DMap.set(key, cartesianToLocal(cartesian, origin));
 
-      // Project to ground for corner points only
-      if (corners.some((c) => pointKey(c) === key)) {
+      // ground only for corners
+      if (corners.some((c) => pointKey2D(c) === key)) {
         const ground = await getProjectionOfPoint(viewer.value, cartesian);
-        const groundLocal = cartesianToLocal(ground, origin);
-        ground3DMap.set(key, groundLocal);
+        ground3DMap.set(key, cartesianToLocal(ground, origin));
       }
     }
 
     if (!origin) return null;
 
-    // 2. Build roof faces
+    /* ===============================
+     * 3. Build initial roof faces
+     * =============================== */
     const roofFaces: Point3D[][] = [];
 
     for (const polygon of subPolygons) {
       const face: Point3D[] = [];
       for (const p of polygon) {
-        const p3d = point3DMap.get(pointKey(p));
-        if (p3d) face.push(p3d);
+        const p3d = point3DMap.get(pointKey2D(p));
+        if (p3d) face.push({ ...p3d });
       }
-      if (face.length >= 3) {
-        roofFaces.push(face);
-      }
+      if (face.length >= 3) roofFaces.push(face);
     }
 
-    // 3. Build wall faces from corners
+    /* ===============================
+     * 4. Apply slope to roof faces
+     * =============================== */
+    const cornerHeightMap = new Map<string, number[]>();
+
+    roofFaces.forEach((face) => {
+      const normal = calculatePolygonNormal(face);
+      const slope =
+        calculatePolygonSlope(normal) > 10 ? calculatePolygonSlope(normal) : 30;
+      const ridge = findRidgePoint(face);
+
+      const adjusted = recomputeFaceBySlope(face, slope, ridge);
+
+      adjusted.forEach((p) => {
+        const k = pointKey3D(p);
+        if (!cornerHeightMap.has(k)) cornerHeightMap.set(k, []);
+        cornerHeightMap.get(k)!.push(p.y);
+      });
+
+      face.splice(0, face.length, ...adjusted);
+    });
+
+    /* ===============================
+     * 5. Resolve shared corner height
+     * =============================== */
+    roofFaces.forEach((face) => {
+      face.forEach((p) => {
+        const heights = cornerHeightMap.get(pointKey3D(p));
+        if (heights && heights.length > 1) {
+          p.y = Math.min(...heights); // chuẩn mái
+        }
+      });
+    });
+
+    /* ===============================
+     * 6. Build wall faces
+     * =============================== */
     const wallFaces: Point3D[][] = [];
     const n = corners.length;
 
     for (let i = 0; i < n; i++) {
-      const nextI = (i + 1) % n;
       const c0 = corners[i]!;
-      const c1 = corners[nextI]!;
+      const c1 = corners[(i + 1) % n]!;
 
-      const roof0 = point3DMap.get(pointKey(c0));
-      const roof1 = point3DMap.get(pointKey(c1));
-      const ground0 = ground3DMap.get(pointKey(c0));
-      const ground1 = ground3DMap.get(pointKey(c1));
+      const roof0 = point3DMap.get(pointKey2D(c0));
+      const roof1 = point3DMap.get(pointKey2D(c1));
+      const ground0 = ground3DMap.get(pointKey2D(c0));
+      const ground1 = ground3DMap.get(pointKey2D(c1));
 
       if (roof0 && roof1 && ground0 && ground1) {
-        wallFaces.push([ground0, ground1, roof1, roof0]);
+        const r0 = roofFaces
+          .flat()
+          .find(
+            (p) =>
+              Math.abs(p.x - roof0.x) < 1e-3 && Math.abs(p.z - roof0.z) < 1e-3,
+          );
+        const r1 = roofFaces
+          .flat()
+          .find(
+            (p) =>
+              Math.abs(p.x - roof1.x) < 1e-3 && Math.abs(p.z - roof1.z) < 1e-3,
+          );
+
+        if (r0 && r1) wallFaces.push([ground0, ground1, r1, r0]);
       }
     }
 
