@@ -10,7 +10,7 @@ import {
   sampleTerrainMostDetailed,
   Cesium3DTileset,
 } from "cesium";
-import { type Edge, type Point } from "./useFabricMap";
+import type { Point3D, Point, Edge } from "@/types";
 
 Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ACCESS_TOKEN;
 
@@ -346,7 +346,6 @@ export function useCesium() {
     if (!origin) return null;
 
     // === 2. Build roof faces ===
-    type Point3D = { x: number; y: number; z: number };
     const roofFaces: Point3D[][] = [];
 
     for (const polygon of subPolygons) {

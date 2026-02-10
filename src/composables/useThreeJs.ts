@@ -5,25 +5,7 @@ import {
   CSS2DObject,
 } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { ref, shallowRef } from "vue";
-
-export interface Point3D {
-  x: number;
-  y: number;
-  z: number;
-}
-
-// Data from buildHouseFaces - face-based format
-export interface HouseData {
-  roofFaces: Point3D[][]; // Each roof face is an array of points
-  wallFaces: Point3D[][]; // Each wall face is an array of points (4 points each)
-}
-
-export interface ThreeJsColors {
-  roof: number;
-  wall: number;
-  roofEdge: number;
-  wallEdge: number;
-}
+import type { ThreeJsColors, Point3D, HouseData } from "@/types";
 
 const DEFAULT_COLORS: ThreeJsColors = {
   roof: 0xcc4444,
@@ -255,6 +237,52 @@ export function useThreeJs() {
     return { line, label };
   };
 
+  const addFaceGroup = (
+    faces: Point3D[][],
+    groupName: string,
+    fillColor: number,
+    edgeColor: number,
+  ) => {
+    const group = new THREE.Group();
+    group.name = groupName;
+
+    for (const face of faces) {
+      if (face.length < 3) continue;
+
+      const verts: number[] = [];
+      face.forEach((p) => verts.push(p.x, p.y, p.z));
+
+      const indices: number[] = [];
+      for (let i = 1; i < face.length - 1; i++) {
+        indices.push(0, i, i + 1);
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+
+      const mesh = new THREE.Mesh(
+        geo,
+        new THREE.MeshStandardMaterial({
+          color: fillColor,
+          side: THREE.DoubleSide,
+        }),
+      );
+
+      group.add(mesh);
+
+      group.add(
+        new THREE.LineSegments(
+          new THREE.EdgesGeometry(geo),
+          new THREE.LineBasicMaterial({ color: edgeColor }),
+        ),
+      );
+    }
+
+    scene.value!.add(group);
+  };
+
   /**
    * Create house from face arrays
    * - roofFaces: each face is Point3D[] (polygon)
@@ -263,89 +291,19 @@ export function useThreeJs() {
   const createHouse = (data: HouseData) => {
     if (!scene.value) return;
 
-    const { roofFaces, wallFaces } = data;
+    addFaceGroup(
+      data.wallFaces,
+      "walls",
+      DEFAULT_COLORS.wall,
+      DEFAULT_COLORS.wallEdge,
+    );
 
-    // === WALLS ===
-    const wallGroup = new THREE.Group();
-    wallGroup.name = "walls";
-
-    for (const face of wallFaces) {
-      if (face.length < 3) continue;
-
-      const geo = new THREE.BufferGeometry();
-      const verts: number[] = [];
-      face.forEach((p) => verts.push(p.x, p.y, p.z));
-
-      // Triangulate (fan from first vertex)
-      const indices: number[] = [];
-      for (let i = 1; i < face.length - 1; i++) {
-        indices.push(0, i, i + 1);
-      }
-
-      geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
-      geo.setIndex(indices);
-      geo.computeVertexNormals();
-
-      const mesh = new THREE.Mesh(
-        geo,
-        new THREE.MeshStandardMaterial({
-          color: DEFAULT_COLORS.wall,
-          side: THREE.DoubleSide,
-        }),
-      );
-      wallGroup.add(mesh);
-
-      // Add edges
-      const edges = new THREE.EdgesGeometry(geo);
-      wallGroup.add(
-        new THREE.LineSegments(
-          edges,
-          new THREE.LineBasicMaterial({ color: DEFAULT_COLORS.wallEdge }),
-        ),
-      );
-    }
-    scene.value.add(wallGroup);
-
-    // === ROOF ===
-    const roofGroup = new THREE.Group();
-    roofGroup.name = "roof";
-
-    for (const face of roofFaces) {
-      if (face.length < 3) continue;
-
-      const geo = new THREE.BufferGeometry();
-      const verts: number[] = [];
-      face.forEach((p) => verts.push(p.x, p.y, p.z));
-
-      // Triangulate (fan from first vertex)
-      const indices: number[] = [];
-      for (let i = 1; i < face.length - 1; i++) {
-        indices.push(0, i, i + 1);
-      }
-
-      geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
-      geo.setIndex(indices);
-      geo.computeVertexNormals();
-
-      const mesh = new THREE.Mesh(
-        geo,
-        new THREE.MeshStandardMaterial({
-          color: DEFAULT_COLORS.roof,
-          side: THREE.DoubleSide,
-        }),
-      );
-      roofGroup.add(mesh);
-
-      // Add edges
-      const edges = new THREE.EdgesGeometry(geo);
-      roofGroup.add(
-        new THREE.LineSegments(
-          edges,
-          new THREE.LineBasicMaterial({ color: DEFAULT_COLORS.roofEdge }),
-        ),
-      );
-    }
-    scene.value.add(roofGroup);
+    addFaceGroup(
+      data.roofFaces,
+      "roof",
+      DEFAULT_COLORS.roof,
+      DEFAULT_COLORS.roofEdge,
+    );
   };
 
   /**

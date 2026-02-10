@@ -1,10 +1,7 @@
 import { ref, markRaw } from "vue";
 import { Canvas, Rect, Circle, Line, Group } from "fabric";
 import { getSubPolygons as getSubPolygonsFromGraph } from "@/utils/graph";
-
-export type Point = { x: number; y: number };
-export type Edge = { from: Point; to: Point };
-export type SubPolygon = Point[];
+import type { Point, Edge, SubPolygon } from "@/types";
 
 export function useFabricMap() {
   const canvas = ref<Canvas | null>(null);
@@ -535,35 +532,6 @@ export function useFabricMap() {
       };
     };
 
-    const clampRidgePoint = (p: Circle) => {
-      rect.setCoords();
-      const { tl, tr, bl, br } = rect.aCoords;
-
-      // Tính điểm giữa của cạnh trái và cạnh phải (ridge line nằm ở giữa rect)
-      const midLeft = { x: (tl.x + bl.x) / 2, y: (tl.y + bl.y) / 2 };
-      const midRight = { x: (tr.x + br.x) / 2, y: (tr.y + br.y) / 2 };
-
-      // Ridge direction (theo chiều ngang của rect đã xoay)
-      const ridgeDir = { x: midRight.x - midLeft.x, y: midRight.y - midLeft.y };
-      const ridgeLenSq = ridgeDir.x ** 2 + ridgeDir.y ** 2;
-      const ridgeLen = Math.sqrt(ridgeLenSq);
-
-      // Project vị trí hiện tại của p lên ridge line
-      const vec = { x: p.left! - midLeft.x, y: p.top! - midLeft.y };
-      let t = (vec.x * ridgeDir.x + vec.y * ridgeDir.y) / ridgeLenSq;
-
-      // Clamp t trong khoảng [padding, 1-padding]
-      const paddingRatio = 10 / ridgeLen;
-      t = Math.max(paddingRatio, Math.min(1 - paddingRatio, t));
-
-      // Tính vị trí mới trên ridge line
-      const newX = midLeft.x + t * ridgeDir.x;
-      const newY = midLeft.y + t * ridgeDir.y;
-
-      p.set({ left: newX, top: newY });
-      p.setCoords(); // Cập nhật hit region
-    };
-
     const updateLines = () => {
       rect.setCoords();
 
@@ -638,12 +606,10 @@ export function useFabricMap() {
     });
 
     p1.on("moving", () => {
-      clampRidgePoint(p1);
       updateLines();
     });
 
     p2.on("moving", () => {
-      clampRidgePoint(p2);
       updateLines();
     });
 
