@@ -46,6 +46,9 @@ export function useCesium() {
       navigationHelpButton: true,
       fullscreenButton: true,
       creditContainer: document.createElement("div"), // Hide the logo/credits
+      requestRenderMode: true,
+      maximumRenderTimeChange: Infinity,
+      shadows: false,
     });
 
     // Enable depth testing so pickPosition works on terrain/buildings
@@ -56,6 +59,7 @@ export function useCesium() {
     try {
       const osmBuildings = await Cesium3DTileset.fromIonAssetId(96188);
       viewer.value.scene.primitives.add(osmBuildings);
+      viewer.value.scene.requestRender();
     } catch (error) {
       console.warn(
         "Failed to load OSM Buildings, falling back to terrain only:",
@@ -294,8 +298,7 @@ export function useCesium() {
 
     roofFaces.forEach((face) => {
       const normal = calculatePolygonNormal(face);
-      const slope =
-        calculatePolygonSlope(normal) > 10 ? calculatePolygonSlope(normal) : 30;
+      const slope = calculatePolygonSlope(normal) || 30;
       const ridge = findRidgePoint(face);
 
       const adjusted = recomputeFaceBySlope(face, slope, ridge);
